@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "room-booking"
+version = "0.1.0"
+description = "Room booking system at Innopolis University."
+authors = ["Vladislav Deryabkin <vladeryabkin@gmail.com>"]
+readme = "README.md"
+repository = "https://github.com/inno-gang/room-booking"
+packages = [{include = "room_booking"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.97.0"
+uvicorn = {extras = ["standard"], version = "^0.22.0"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
