@@ -12,6 +12,12 @@ python = "^3.11"
 fastapi = "^0.97.0"
 uvicorn = {extras = ["standard"], version = "^0.22.0"}
 
+[tool.poetry.group.dev.dependencies]
+black = "^23.3.0"
+pyright = "^1.1.313"
+
+[tool.pyright]
+include = ["app"]
 
 [build-system]
 requires = ["poetry-core"]
