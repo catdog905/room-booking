@@ -9,4 +9,4 @@ __pycache__/
 .DS_Store
 
 # Tools
-pre-commit-config
+.pre-commit-config.yaml
