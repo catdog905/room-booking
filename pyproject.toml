@@ -14,7 +14,7 @@ uvicorn = {extras = ["standard"], version = "^0.22.0"}
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
-pyright = "^1.1.313"
+pyright = "^1.1.314"
 
 [tool.pyright]
 include = ["app"]

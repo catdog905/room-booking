@@ -1,8 +1,12 @@
-from fastapi import FastAPI
-
-app = FastAPI()
+from app.api.app import app
 
 
-@app.get("/")
-def ping() -> str:
-    return "pong"
+@app.on_event("startup")
+async def startup():
+    # Wire-up all dependencies here
+    ...
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    ...
