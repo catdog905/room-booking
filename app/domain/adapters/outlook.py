@@ -1,3 +1,4 @@
+from re import I
 import exchangelib
 
 from dataclasses import dataclass
@@ -21,7 +22,24 @@ class Adapter:
         )
 
     async def create_booking(self, booking: Booking) -> int:
-        raise NotImplementedError
+        item = exchangelib.CalendarItem(
+            account=self.account,
+            folder=self.account.calendar,
+            start=booking.period.start.datetime,
+            end=booking.period.end.datetime,
+            subject=booking.title,
+            required_attendees=[booking.creator.email_address],
+        )
+
+        item.save(send_meeting_invitations=exchangelib.items.SEND_ONLY_TO_ALL)
+
+        id = item.id
+
+        if id is None:
+            # TODO(metafates): make error make informational
+            raise Exception("id is none")
+
+        return id
 
     async def delete_booking(self, booking_id: int):
         raise NotImplementedError
