@@ -3,7 +3,7 @@ from datetime import datetime, tzinfo
 
 class User:
     def __init__(self, email_address: str):
-        pass
+        self.email_address = email_address
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, User):
@@ -14,7 +14,8 @@ class User:
 # Room
 class Room:
     def __init__(self, name: str, email_address: str):
-        pass
+        self.name = name
+        self.email_address = email_address
 
 
 # Moment in time
@@ -22,15 +23,15 @@ class TimeStamp:
     def __init__(self, dt: datetime, tz: tzinfo):
         if dt.tzinfo is not None and dt.tzinfo != tz:
             raise Exception("dt must not have a tzinfo set or it should match with tz")
-        self._datetime = dt
-        self._timezone = tz
+        self.datetime = dt
+        self.timezone = tz
 
 
 # Period in time
 class TimePeriod:
     def __init__(self, start: TimeStamp, end: TimeStamp):
-        self._start = start
-        self._end = end
+        self.start = start
+        self.end = end
 
 
 # Single booking
@@ -43,7 +44,7 @@ class Booking:
         room: Room,
         creator: User,
     ):
-        self._title = title
-        self._period = period
-        self._room = room
-        self._creator = creator
+        self.title = title
+        self.period = period
+        self.room = room
+        self.creator = creator
