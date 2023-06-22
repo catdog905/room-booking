@@ -10,6 +10,7 @@ packages = [{include = "room_booking"}]
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = "^0.97.0"
+exchangelib = "^5.0.3"
 uvicorn = {extras = ["standard"], version = "^0.22.0"}
 
 [tool.poetry.group.dev.dependencies]
