@@ -26,8 +26,15 @@ class Outlook(BookingsRepo):
 
         return item.id
 
+    async def _get_booking(self, booking_id: int) -> exchangelib.CalendarItem:
+        # FIXME(metafates): Pyright complains about this
+        # `Cannot access member "get" for type "threaded_cached_property"`
+        # Though, it should be working...
+        return self._account.calendar.get(id=booking_id)
+
     async def delete_booking(self, booking_id: int):
-        raise NotImplementedError
+        booking = await self._get_booking(booking_id)
+        booking.delete()
 
     async def get_bookings_in_period(
         self,
@@ -38,4 +45,10 @@ class Outlook(BookingsRepo):
         raise NotImplementedError
 
     async def get_booking_owner(self, booking_id: int) -> User:
+        booking = await self._get_booking(booking_id)
+
+        # TODO(metafates): find a way to extract attendees from booking
+        # because whatever required_attendees returns makes no sense
+        attendees = booking.required_attendees
+
         raise NotImplementedError
