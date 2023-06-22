@@ -10,3 +10,6 @@ __pycache__/
 
 # Tools
 .pre-commit-config.yaml
+
+# Sensitive
+.env
