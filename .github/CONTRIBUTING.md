@@ -41,7 +41,18 @@ poetry install
 </details>
 
 <details>
-<summary>Step 3. Run the development server</summary>
+<summary>Step 3. Create configuration file</summary>
+
+Copy configuration file template
+```shell
+cp template.env .env
+```
+and modify, if necessary.
+
+</details>
+
+<details>
+<summary>Step 4. Run the development server</summary>
 
 ```shell
 poetry run uvicorn app.main:app --reload
