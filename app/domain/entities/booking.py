@@ -1,14 +1,8 @@
+__all__ = ["Room", "TimeStamp", "TimePeriod", "Booking"]
+
 from datetime import datetime, tzinfo
 
-
-class User:
-    def __init__(self, email_address: str):
-        pass
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, User):
-            return False
-        raise NotImplementedError
+from .iam import User
 
 
 # Room
@@ -41,9 +35,9 @@ class Booking:
         title: str,
         period: TimePeriod,
         room: Room,
-        creator: User,
+        owner: User,
     ):
         self._title = title
         self._period = period
         self._room = room
-        self._creator = creator
+        self._owner = owner

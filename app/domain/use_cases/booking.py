@@ -1,4 +1,4 @@
-from app.domain.deps.bookings_repo import BookingsRepo
+from app.domain.dependencies.bookings_repo import BookingsRepo
 from app.domain.entities import User, Room
 
 
@@ -22,4 +22,4 @@ async def delete_booking_by_user(
     # 3. Is booking in the past?
     #   Yes -> raise exception "invalid"
     #   No  -> OK, delete booking
-    pass
+    ...
