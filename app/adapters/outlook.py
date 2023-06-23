@@ -28,7 +28,7 @@ class Outlook(BookingsRepo):
 
         return item.id
 
-    async def _get_booking(self, booking_id: int) -> exchangelib.CalendarItem:
+    async def _get_calendar_item(self, id: int) -> exchangelib.CalendarItem:
         # FIXME(metafates): Pyright complains about this
         # `Cannot access member "get" for type "threaded_cached_property"`
         # Though, it should be working...
@@ -41,10 +41,10 @@ class Outlook(BookingsRepo):
         # but it's also marked as error by Pyright!
         # So I guess it's just has something to do with
         # cosmic radiation, otherwise I don't have an explanation
-        return self._account.calendar.get(id=booking_id)
+        return self._account.calendar.get(id=id)
 
     async def delete_booking(self, booking_id: int):
-        booking = await self._get_booking(booking_id)
+        booking = await self._get_calendar_item(booking_id)
         booking.delete()
 
     async def get_bookings_in_period(
@@ -56,10 +56,28 @@ class Outlook(BookingsRepo):
         raise NotImplementedError
 
     async def get_booking_owner(self, booking_id: int) -> User:
-        booking = await self._get_booking(booking_id)
+        calendar_item = await self._get_calendar_item(booking_id)
+        attendees = calendar_item.required_attendees
 
-        # TODO(metafates): find a way to extract attendees from booking
-        # because whatever required_attendees returns makes no sense
-        attendee = booking.required_attendees.value_cls
+        if not len(attendees):
+            # TODO(metafates): make error more informational
+            raise Exception("no required attendees found")
 
-        raise NotImplementedError
+        # Attendees list follows the following pattern:
+        #
+        # 1. booking service: student.booking@innopolis.ru
+        # 2. the actual user: n.surname@innopolis.university
+        # 3. room email: iu.resource.lectureroom314@innopolis.ru
+        #
+        # Yes, the room has it's own email, I know...
+
+        # so what we need is the second attendee here
+        # but perform validation before accessing it
+
+        if len(attendees) < 2:
+            # TODO(metafates): make error more informational
+            raise Exception("unexpected attendees count")
+
+        owner = attendees[1]
+
+        return User(owner.mailbox.email_address)
