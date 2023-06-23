@@ -1,6 +1,6 @@
-__all__ = ["Room", "TimeStamp", "TimePeriod", "Booking", "BookingWithID"]
+__all__ = ["Room", "TimeStamp", "TimePeriod", "Booking", "BookingWithId"]
 
-from typing import assert_never
+from typing import assert_never, TypedDict, Unpack
 from datetime import datetime, UTC
 
 from .common import Language
@@ -42,9 +42,23 @@ class TimeStamp:
     def datetime(self):
         return self._datetime_utc
 
+    def __lt__(self, other: "TimeStamp"):
+        return self._datetime_utc < other._datetime_utc
+
+    def __le__(self, other: "TimeStamp"):
+        return self._datetime_utc <= other._datetime_utc
+
+    def __gt__(self, other: "TimeStamp"):
+        return self._datetime_utc > other._datetime_utc
+
+    def __ge__(self, other: "TimeStamp"):
+        return self._datetime_utc >= other._datetime_utc
+
 
 class TimePeriod:
     def __init__(self, start: TimeStamp, end: TimeStamp):
+        if end > start:
+            raise Exception("end must not be before start")
         self._start = start
         self._end = end
 
@@ -57,19 +71,22 @@ class TimePeriod:
         return self._end
 
 
+class BookingDict(TypedDict):
+    title: str
+    period: TimePeriod
+    room: Room
+    owner: User
+
+
 class Booking:
     def __init__(
         self,
-        *,
-        title: str,
-        period: TimePeriod,
-        room: Room,
-        owner: User,
+        **kwargs: Unpack[BookingDict],
     ):
-        self._title = title
-        self._period = period
-        self._room = room
-        self._owner = owner
+        self._title = kwargs["title"]
+        self._period = kwargs["period"]
+        self._room = kwargs["room"]
+        self._owner = kwargs["owner"]
 
     @property
     def title(self):
@@ -88,16 +105,17 @@ class Booking:
         return self._owner
 
 
-class BookingWithID(Booking):
-    def __init__(self, booking: Booking, id: int):
-        super().__init__(
-            title=booking.title,
-            period=booking.period,
-            room=booking.room,
-            owner=booking.owner,
-        )
+class BookingWithIdDict(BookingDict):
+    id: int
 
-        self._id = id
+
+class BookingWithId(Booking):
+    def __init__(
+        self,
+        **kwargs: Unpack[BookingWithIdDict],
+    ):
+        super().__init__(**kwargs)
+        self._id = kwargs["id"]
 
     @property
     def id(self):

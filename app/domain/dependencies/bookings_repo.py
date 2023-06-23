@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from app.domain.entities import Booking, TimePeriod, Room, User
-from app.domain.entities.booking import BookingWithID
+from app.domain.entities.booking import BookingWithId
 
 
 class BookingsRepo(ABC):
@@ -19,7 +19,7 @@ class BookingsRepo(ABC):
         period: TimePeriod,
         filter_rooms: list[Room] | None = None,
         filter_user_email: str | None = None,
-    ) -> list[BookingWithID]:
+    ) -> list[BookingWithId]:
         pass
 
     @abstractmethod
