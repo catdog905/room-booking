@@ -29,19 +29,7 @@ class Outlook(BookingsRepo):
         return item.id
 
     async def _get_calendar_item(self, id: BookingId) -> exchangelib.CalendarItem:
-        # FIXME(metafates): Pyright complains about this
-        # `Cannot access member "get" for type "threaded_cached_property"`
-        # Though, it should be working...
-        #
-        # Documentation is insanely bad but we 100% know that
-        # `calendar.all()` is a valid function, they use this example:
-        #
-        # `for item in a.inbox.all().order_by('-datetime_received')`
-        #
-        # but it's also marked as error by Pyright!
-        # So I guess it's just has something to do with
-        # cosmic radiation, otherwise I don't have an explanation
-        return self._account.calendar.get(id=id)
+        return self._account.calendar.get(id=id)  # type: ignore
 
     async def delete_booking(self, booking_id: BookingId):
         booking = await self._get_calendar_item(booking_id)
@@ -59,7 +47,7 @@ class Outlook(BookingsRepo):
         calendar_item = await self._get_calendar_item(booking_id)
         attendees = calendar_item.required_attendees
 
-        if not len(attendees):
+        if not len(attendees):  # type: ignore
             # TODO(metafates): make error more informational
             raise Exception("no required attendees found")
 
@@ -74,10 +62,10 @@ class Outlook(BookingsRepo):
         # so what we need is the second attendee here
         # but perform validation before accessing it
 
-        if len(attendees) < 2:
+        if len(attendees) < 2:  # type: ignore
             # TODO(metafates): make error more informational
             raise Exception("unexpected attendees count")
 
-        owner = attendees[1]
+        owner = attendees[1]  # type: ignore
 
         return User(owner.mailbox.email_address)
