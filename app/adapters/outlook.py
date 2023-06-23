@@ -1,3 +1,4 @@
+from re import M
 import exchangelib
 
 from app.domain.entities import Booking, TimePeriod, Room, User
@@ -31,6 +32,15 @@ class Outlook(BookingsRepo):
         # FIXME(metafates): Pyright complains about this
         # `Cannot access member "get" for type "threaded_cached_property"`
         # Though, it should be working...
+        #
+        # Documentation is insanely bad but we 100% know that
+        # `calendar.all()` is a valid function, they use this example:
+        #
+        # `for item in a.inbox.all().order_by('-datetime_received')`
+        #
+        # but it's also marked as error by Pyright!
+        # So I guess it's just has something to do with
+        # cosmic radiation, otherwise I don't have an explanation
         return self._account.calendar.get(id=booking_id)
 
     async def delete_booking(self, booking_id: int):
@@ -43,6 +53,7 @@ class Outlook(BookingsRepo):
         filter_rooms: list[Room] | None = None,
         filter_user_email: str | None = None,
     ) -> list[BookingWithID]:
+        self._account.calendar.all().order_by("-datetime_received")
         raise NotImplementedError
 
     async def get_booking_owner(self, booking_id: int) -> User:
@@ -50,6 +61,6 @@ class Outlook(BookingsRepo):
 
         # TODO(metafates): find a way to extract attendees from booking
         # because whatever required_attendees returns makes no sense
-        attendees = booking.required_attendees
+        attendee = booking.required_attendees.value_cls
 
         raise NotImplementedError
