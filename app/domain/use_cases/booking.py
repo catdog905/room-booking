@@ -1,18 +1,18 @@
 from app.domain.dependencies.bookings_repo import BookingsRepo
-from app.domain.entities import User, Room
+from app.domain.entities import User, Room, BookingId
 
 
 async def book_room_for_user(
     repo: BookingsRepo,
     room: Room,
     user: User,
-) -> int:
+) -> BookingId:
     ...
 
 
 async def delete_booking_by_user(
     repo: BookingsRepo,
-    booking_id: int,
+    booking_id: BookingId,
     user: User,
 ):
     # 1. Try to find booking

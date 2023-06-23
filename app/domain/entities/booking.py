@@ -1,10 +1,13 @@
-__all__ = ["Room", "TimeStamp", "TimePeriod", "Booking", "BookingWithId"]
+__all__ = ["Room", "TimeStamp", "TimePeriod", "Booking", "BookingWithId", "BookingId"]
 
 from typing import assert_never, TypedDict, Unpack
 from datetime import datetime, UTC
 
 from .common import Language
 from .iam import User
+
+
+BookingId = str
 
 
 class Room:
@@ -106,7 +109,7 @@ class Booking:
 
 
 class BookingWithIdDict(BookingDict):
-    id: int
+    id: BookingId
 
 
 class BookingWithId(Booking):

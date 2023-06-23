@@ -3,14 +3,14 @@ import exchangelib
 
 from app.domain.entities import Booking, TimePeriod, Room, User
 from app.domain.dependencies import BookingsRepo
-from app.domain.entities.booking import BookingWithId
+from app.domain.entities.booking import BookingId, BookingWithId
 
 
 class Outlook(BookingsRepo):
     def __init__(self, account: exchangelib.Account) -> None:
         self._account = account
 
-    async def create_booking(self, booking: Booking) -> int:
+    async def create_booking(self, booking: Booking) -> BookingId:
         item = exchangelib.CalendarItem(
             account=self._account,
             folder=self._account.calendar,
@@ -28,7 +28,7 @@ class Outlook(BookingsRepo):
 
         return item.id
 
-    async def _get_calendar_item(self, id: int) -> exchangelib.CalendarItem:
+    async def _get_calendar_item(self, id: BookingId) -> exchangelib.CalendarItem:
         # FIXME(metafates): Pyright complains about this
         # `Cannot access member "get" for type "threaded_cached_property"`
         # Though, it should be working...
@@ -43,7 +43,7 @@ class Outlook(BookingsRepo):
         # cosmic radiation, otherwise I don't have an explanation
         return self._account.calendar.get(id=id)
 
-    async def delete_booking(self, booking_id: int):
+    async def delete_booking(self, booking_id: BookingId):
         booking = await self._get_calendar_item(booking_id)
         booking.delete()
 
@@ -55,7 +55,7 @@ class Outlook(BookingsRepo):
     ) -> list[BookingWithId]:
         raise NotImplementedError
 
-    async def get_booking_owner(self, booking_id: int) -> User:
+    async def get_booking_owner(self, booking_id: BookingId) -> User:
         calendar_item = await self._get_calendar_item(booking_id)
         attendees = calendar_item.required_attendees
 

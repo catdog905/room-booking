@@ -1,16 +1,16 @@
 from abc import ABC, abstractmethod
 
-from app.domain.entities import Booking, TimePeriod, Room, User
+from app.domain.entities import Booking, BookingId, TimePeriod, Room, User
 from app.domain.entities.booking import BookingWithId
 
 
 class BookingsRepo(ABC):
     @abstractmethod
-    async def create_booking(self, booking: Booking) -> int:
+    async def create_booking(self, booking: Booking) -> BookingId:
         pass
 
     @abstractmethod
-    async def delete_booking(self, booking_id: int):
+    async def delete_booking(self, booking_id: BookingId):
         pass
 
     @abstractmethod
@@ -23,5 +23,5 @@ class BookingsRepo(ABC):
         pass
 
     @abstractmethod
-    async def get_booking_owner(self, booking_id: int) -> User:
+    async def get_booking_owner(self, booking_id: BookingId) -> User:
         pass
