@@ -1,4 +1,4 @@
-__all__ = ["Room", "TimeStamp", "TimePeriod", "Booking"]
+__all__ = ["Room", "TimeStamp", "TimePeriod", "Booking", "BookingWithID"]
 
 from typing import assert_never
 from datetime import datetime, UTC
@@ -86,3 +86,19 @@ class Booking:
     @property
     def owner(self):
         return self._owner
+
+
+class BookingWithID(Booking):
+    def __init__(self, booking: Booking, id: int):
+        super().__init__(
+            title=booking.title,
+            period=booking.period,
+            room=booking.room,
+            owner=booking.owner,
+        )
+
+        self._id = id
+
+    @property
+    def id(self):
+        return self._id

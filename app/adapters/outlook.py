@@ -2,6 +2,7 @@ import exchangelib
 
 from app.domain.entities import Booking, TimePeriod, Room, User
 from app.domain.dependencies import BookingsRepo
+from app.domain.entities.booking import BookingWithID
 
 
 class Outlook(BookingsRepo):
@@ -41,7 +42,7 @@ class Outlook(BookingsRepo):
         period: TimePeriod,
         filter_rooms: list[Room] | None = None,
         filter_user_email: str | None = None,
-    ) -> list[Booking]:
+    ) -> list[BookingWithID]:
         raise NotImplementedError
 
     async def get_booking_owner(self, booking_id: int) -> User:
