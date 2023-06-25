@@ -1,10 +1,12 @@
+assets:
+  id_rsa: "catdog905/secret-repo#keys/id_rsa"
 merge:
   script: |-
     echo "hello world"
 ssh:
   host: 217.18.62.143
   port: 22
-  key: ./keys/id_rsa
+  key: ../keys/id_rsa
   login: root
 deploy:
   script: |-
