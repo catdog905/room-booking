@@ -1,6 +1,8 @@
-from datetime import datetime
+import concurrent.futures
+import asyncio
 import exchangelib
 import collections.abc
+from datetime import datetime
 
 from app.domain.entities import Booking, TimePeriod, Room, User
 from app.domain.dependencies import BookingsRepo
@@ -157,10 +159,23 @@ def calendar_item_to_booking(item: exchangelib.CalendarItem) -> BookingWithId:
 
 
 class Outlook(BookingsRepo):
-    def __init__(self, account: exchangelib.Account) -> None:
+    def __init__(
+        self,
+        account: exchangelib.Account,
+        executor: concurrent.futures.ThreadPoolExecutor | None = None,
+    ) -> None:
         self._account = account
 
+        if executor is None:
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
+
+        self._executor = executor
+
     async def create_booking(self, booking: Booking) -> BookingId:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, self._create_booking, booking)
+
+    def _create_booking(self, booking: Booking) -> BookingId:
         item = exchangelib.CalendarItem(
             account=self._account,
             folder=self._account.calendar,
@@ -183,11 +198,32 @@ class Outlook(BookingsRepo):
         return item.id
 
     async def delete_booking(self, booking_id: BookingId):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor, self._delete_booking, booking_id
+        )
+
+    def _delete_booking(self, booking_id: BookingId):
         # TODO(metafates): assertion magic so that pyright will stop complaining about this
         booking = self._account.calendar.get(id=booking_id)  # type: ignore
         booking.delete()
 
     async def get_bookings_in_period(
+        self,
+        period: TimePeriod,
+        filter_rooms: list[Room] | None = None,
+        filter_user_email: str | None = None,
+    ) -> list[BookingWithId]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor,
+            self._get_bookings_in_period,
+            period,
+            filter_rooms,
+            filter_user_email,
+        )
+
+    def _get_bookings_in_period(
         self,
         period: TimePeriod,
         filter_rooms: list[Room] | None = None,
@@ -219,6 +255,12 @@ class Outlook(BookingsRepo):
         return bookings
 
     async def get_booking_owner(self, booking_id: BookingId) -> User:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor, self._get_booking_owner, booking_id
+        )
+
+    def _get_booking_owner(self, booking_id: BookingId) -> User:
         # TODO(metafates): assertion magic so that pyright will stop complaining about this
         calendar_item = self._account.calendar.get(id=booking_id)  # type: ignore
         return calendar_item_owner(calendar_item)
