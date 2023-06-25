@@ -28,31 +28,28 @@ def calendar_item_owner(item: exchangelib.CalendarItem) -> User:
     # 2. Other meetings (usually old ones) has owner in the `organizer`
     #    field. So if (1) fails, try this
 
-    email_address: str
+    assert item.required_attendees is None or isinstance(
+        item.required_attendees, collections.abc.Sequence
+    )
 
-    if (attendees := item.required_attendees) is not None:
-        assert isinstance(attendees, collections.abc.Sequence)
+    assert item.organizer is None or isinstance(item.organizer, exchangelib.Mailbox)
 
+    mailbox: exchangelib.Mailbox
+    if (attendees := item.required_attendees) is not None and len(attendees):
         attendee: exchangelib.Attendee
         if len(attendees) > 1:
             attendee = attendees[1]
-        elif len(attendees) == 1:
-            attendee = attendees[0]
         else:
-            # TODO(metafates): try getting an organizer then?
-            raise MissingCalendarItemFieldException("attendees field is empty")
+            attendee = attendees[0]
 
+        assert isinstance(attendee.mailbox, exchangelib.Mailbox)
         mailbox = attendee.mailbox
-        assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
-
-        email_address = str(mailbox.email_address)
     elif (organizer := item.organizer) is not None:
-        assert isinstance(organizer, exchangelib.Mailbox)
-
-        email_address = str(organizer.email_address)
+        mailbox = organizer
     else:
         raise MissingCalendarItemFieldException("owner")
 
+    email_address = str(mailbox.email_address)
     return User(email_address)
 
 
@@ -60,29 +57,27 @@ def calendar_item_time_period(item: exchangelib.CalendarItem) -> TimePeriod:
     def ews_datetime_to_timestamp(
         ews: exchangelib.items.calendar_item.DateOrDateTimeField,
     ) -> TimeStamp:
-        dt: datetime
-
-        # TODO(metafates): not sure about it... need to check if it works
         if isinstance(ews, exchangelib.EWSDateTime):
-            dt = datetime(
-                year=ews.year,
-                month=ews.month,
-                day=ews.month,
-                hour=ews.hour,
-                minute=ews.minute,
+            return TimeStamp(
+                datetime_utc=datetime(
+                    year=ews.year,
+                    month=ews.month,
+                    day=ews.month,
+                    hour=ews.hour,
+                    minute=ews.minute,
+                )
             )
-        elif isinstance(ews, exchangelib.EWSDate):
-            dt = datetime(
-                year=ews.year,
-                month=ews.month,
-                day=ews.month,
-            )
-        else:
-            raise InvalidCalendarItemException("unknown date type")
 
-        return TimeStamp(
-            datetime_utc=dt,
-        )
+        if isinstance(ews, exchangelib.EWSDate):
+            return TimeStamp(
+                datetime_utc=datetime(
+                    year=ews.year,
+                    month=ews.month,
+                    day=ews.month,
+                )
+            )
+
+        raise InvalidCalendarItemException("Unknown date type")
 
     if item.start is None:
         # TODO(metafates): improve these error messages
@@ -130,6 +125,8 @@ def calendar_item_room(item: exchangelib.CalendarItem) -> Room:
 
     email = str(email_address)
 
+    # TODO(metafates): get the names somehow?
+    # We probobaly need a database for that, so not possible for now
     return Room(email=email, name_en="", name_ru="")
 
 
@@ -176,11 +173,17 @@ class Outlook(BookingsRepo):
         item.save(send_meeting_invitations=exchangelib.items.SEND_ONLY_TO_ALL)
 
         if item.id is None:
+            # I'm not sure if such sitation is possible, but just in case.
+            #
+            # If after saving a booking id wasn't set somehow
+            # we should undo the booking.
+            item.delete()
             raise MissingCalendarItemFieldException("id")
 
         return item.id
 
     async def delete_booking(self, booking_id: BookingId):
+        # TODO(metafates): assertion magic so that pyright will stop complaining about this
         booking = self._account.calendar.get(id=booking_id)  # type: ignore
         booking.delete()
 
@@ -190,6 +193,7 @@ class Outlook(BookingsRepo):
         filter_rooms: list[Room] | None = None,
         filter_user_email: str | None = None,
     ) -> list[BookingWithId]:
+        # TODO(metafates): assertion magic so that pyright will stop complaining about this
         items_in_period = self._account.calendar.filter(  # type: ignore
             start__range=(period.start.datetime, period.end.datetime)
         )
@@ -215,5 +219,6 @@ class Outlook(BookingsRepo):
         return bookings
 
     async def get_booking_owner(self, booking_id: BookingId) -> User:
+        # TODO(metafates): assertion magic so that pyright will stop complaining about this
         calendar_item = self._account.calendar.get(id=booking_id)  # type: ignore
         return calendar_item_owner(calendar_item)
