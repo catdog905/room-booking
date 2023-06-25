@@ -7,6 +7,16 @@ from app.domain.dependencies import BookingsRepo
 from app.domain.entities.booking import BookingId, BookingWithId, TimeStamp
 
 
+class InvalidCalendarItemException(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class MissingCalendarItemFieldException(InvalidCalendarItemException):
+    def __init__(self, field: str) -> None:
+        super().__init__(f"Missing field: {field}")
+
+
 def calendar_item_owner(item: exchangelib.CalendarItem) -> User:
     # We have to deal with two* cases here
     #
@@ -29,8 +39,8 @@ def calendar_item_owner(item: exchangelib.CalendarItem) -> User:
         elif len(attendees) == 1:
             attendee = attendees[0]
         else:
-            # TODO(metafates): improve these error messages
-            raise Exception("no attendees")
+            # TODO(metafates): try getting an organizer then?
+            raise MissingCalendarItemFieldException("attendees field is empty")
 
         mailbox = attendee.mailbox
         assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
@@ -41,8 +51,7 @@ def calendar_item_owner(item: exchangelib.CalendarItem) -> User:
 
         email_address = str(organizer.email_address)
     else:
-        # TODO(metafates): improve these error messages
-        raise Exception("failed to get calendar item owner")
+        raise MissingCalendarItemFieldException("owner")
 
     return User(email_address)
 
@@ -69,8 +78,7 @@ def calendar_item_time_period(item: exchangelib.CalendarItem) -> TimePeriod:
                 day=ews.month,
             )
         else:
-            # TODO(metafates): improve these error messages
-            raise Exception("unknown ews date instance")
+            raise InvalidCalendarItemException("unknown date type")
 
         return TimeStamp(
             datetime_utc=dt,
@@ -78,11 +86,11 @@ def calendar_item_time_period(item: exchangelib.CalendarItem) -> TimePeriod:
 
     if item.start is None:
         # TODO(metafates): improve these error messages
-        raise Exception("start missing")
+        raise MissingCalendarItemFieldException("start")
 
     if item.end is None:
         # TODO(metafates): improve these error messages
-        raise Exception("end is missing")
+        raise MissingCalendarItemFieldException("end")
 
     start = ews_datetime_to_timestamp(item.start)
     end = ews_datetime_to_timestamp(item.end)
@@ -113,7 +121,7 @@ def calendar_item_room(item: exchangelib.CalendarItem) -> Room:
         # Usually, if the room itself is placed as the last attendee.
         attendee = attendees[-1]
     else:
-        raise Exception("no room specified")
+        raise MissingCalendarItemFieldException("room")
 
     mailbox = attendee.mailbox
 
@@ -128,15 +136,13 @@ def calendar_item_room(item: exchangelib.CalendarItem) -> Room:
 def calendar_item_to_booking(item: exchangelib.CalendarItem) -> BookingWithId:
     id = item.id
     if id is None:
-        # TODO(metafates): improve these error messages
-        raise Exception("id is missing")
+        raise MissingCalendarItemFieldException("id")
 
     id = BookingId(id)
 
     subject = item.subject
     if subject is None:
-        # TODO(metafates): improve these error messages
-        raise Exception("subject is missing")
+        raise MissingCalendarItemFieldException("subject")
 
     title = str(subject)
 
@@ -170,8 +176,7 @@ class Outlook(BookingsRepo):
         item.save(send_meeting_invitations=exchangelib.items.SEND_ONLY_TO_ALL)
 
         if item.id is None:
-            # TODO(metafates): make error make informational
-            raise Exception("id is none")
+            raise MissingCalendarItemFieldException("id")
 
         return item.id
 
