@@ -7,9 +7,12 @@ import exchangelib.recurrence
 import collections.abc
 from datetime import datetime
 
+import app.domain.dependencies.bookable as bookable
+
 from app.domain.entities import Booking, TimePeriod, Room, User
 from app.domain.dependencies import BookingsRepo
 from app.domain.entities.booking import BookingId, BookingWithId, TimeStamp
+from app.domain.entities.common import Language
 
 
 class InvalidCalendarItemException(Exception):
@@ -113,49 +116,38 @@ def calendar_item_room(item: exchangelib.CalendarItem) -> Room:
         item.required_attendees, collections.abc.Sequence
     )
 
-    email: str
-
     if (resources := item.resources) is not None and len(resources):
-        # Usually, there's only one item in resources list
-        attendee = resources[0]
-        mailbox = attendee.mailbox
+        for resource in resources:
+            assert isinstance(resource, exchangelib.Attendee)
 
-        assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
-        email = str(mailbox.email_address)
-    elif (attendees := item.required_attendees) is not None and len(attendees):
+            mailbox = resource.mailbox
+            assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
+
+            email = str(mailbox.email_address)
+
+            if (room := bookable.ROOMS.get_by_email(email)) is not None:
+                return Room.from_bookable_room(room)
+
+    if (attendees := item.required_attendees) is not None and len(attendees):
         # Usually, if the room itself is placed as the last attendee.
-        attendee = attendees[-1]
-        mailbox = attendee.mailbox
+        for attendee in attendees:
+            assert isinstance(attendee, exchangelib.Attendee)
 
-        assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
-        _email = str(mailbox.email_address)
+            mailbox = attendee.mailbox
+            assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
 
-        if _email.startswith("iu.resource"):
-            email = _email
-        else:
-            # FIXME(metafates): this is a huge hack.
-            # Works with the following format only:
-            #
-            # University Room #321 (Lecture Room x48)
-            # University Room #3.1 (Meeting Room) (? not sure about that)
-            location = str(item.location).lower()
-            matches = re.findall(r"#\d(.\d|\d)*", location)
+            email = str(mailbox.email_address)
 
-            if not len(matches):
-                raise MissingCalendarItemFieldException("room")
+            if (room := bookable.ROOMS.get_by_email(email)) is not None:
+                return Room.from_bookable_room(room)
 
-            room_number = matches[0]
+    if (location := item.location) is not None:
+        name = str(location)
 
-            if "lecture" in location:
-                email = f"iu.resource.lectureroom{room_number}@innopolis.ru"
-            else:
-                email = f"iu.resource.meetingroom.{room_number}@innopolis.ru"
-    else:  # TODO: try parsing location here
-        raise MissingCalendarItemFieldException("room")
+        if (room := bookable.ROOMS.get_by_name(name)) is not None:
+            return Room.from_bookable_room(room)
 
-    # TODO(metafates): get the names somehow?
-    # We probobaly need a database for that, so not possible for now
-    return Room(email=email, name_en="", name_ru="")
+    raise MissingCalendarItemFieldException("room")
 
 
 def calendar_item_to_booking(item: exchangelib.CalendarItem) -> BookingWithId:
@@ -185,13 +177,6 @@ def calendar_item_to_booking(item: exchangelib.CalendarItem) -> BookingWithId:
     )
 
 
-def is_possible_booking(item: exchangelib.CalendarItem) -> bool:
-    if item.is_recurring:
-        return False
-
-    return True
-
-
 class Outlook(BookingsRepo):
     def __init__(
         self,
@@ -211,15 +196,32 @@ class Outlook(BookingsRepo):
 
     def _create_booking(self, booking: Booking) -> BookingId:
         # TODO(metafates): add proper fields
+
+        # Here we try to satisfy all legacy systems
         item = exchangelib.CalendarItem(
             account=self._account,
             folder=self._account.calendar,
             start=booking.period.start.datetime,
             end=booking.period.end.datetime,
             subject=booking.title,
-            required_attendees=[booking.owner.email, booking.room.email],
+            location=booking.room.get_name(Language.EN),
+            required_attendees=[
+                exchangelib.Attendee(
+                    mailbox=exchangelib.Mailbox(
+                        email_address=self._account.primary_smtp_address
+                    )
+                ),
+                exchangelib.Attendee(
+                    mailbox=exchangelib.Mailbox(email_address=booking.owner.email),
+                    response_type="Accept",
+                ),
+                exchangelib.Attendee(
+                    mailbox=exchangelib.Mailbox(email_address=booking.room.email),
+                ),
+            ],
         )
 
+        # After this operation the ID will be set
         item.save(send_meeting_invitations=exchangelib.items.SEND_ONLY_TO_ALL)
 
         if item.id is None:
@@ -227,7 +229,11 @@ class Outlook(BookingsRepo):
             #
             # If after saving a booking id wasn't set somehow
             # we should undo the booking.
-            item.delete()
+            try:
+                item.delete()
+            except Exception as e:
+                logging.warn(f"Error while reverting booking: {e}")
+
             raise MissingCalendarItemFieldException("id")
 
         return item.id
@@ -273,9 +279,6 @@ class Outlook(BookingsRepo):
 
         for item in items_in_period:
             assert isinstance(item, exchangelib.CalendarItem)
-
-            if not is_possible_booking(item):
-                continue
 
             try:
                 booking = calendar_item_to_booking(item)
