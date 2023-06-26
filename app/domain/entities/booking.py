@@ -60,7 +60,7 @@ class TimeStamp:
 
 class TimePeriod:
     def __init__(self, start: TimeStamp, end: TimeStamp):
-        if end > start:
+        if end < start:
             raise Exception("end must not be before start")
         self._start = start
         self._end = end
