@@ -1,6 +1,9 @@
 import concurrent.futures
 import asyncio
+import logging
+import re
 import exchangelib
+import exchangelib.recurrence
 import collections.abc
 from datetime import datetime
 
@@ -99,9 +102,8 @@ def calendar_item_room(item: exchangelib.CalendarItem) -> Room:
     # Here we have to deal with two cases
     #
     # 1. Sometimes room is in `resources` field (makes sense)
-    # 2. Sometimes it is in the `required_attendees` field (oh god why????)
-
-    attendee: exchangelib.Attendee
+    # 2. Sometimes it's in the `required_attendees` field (oh god why????)
+    # 3. And... sometimes it's in the `location` without any further information
 
     assert item.resources is None or isinstance(
         item.resources, collections.abc.Sequence
@@ -111,21 +113,45 @@ def calendar_item_room(item: exchangelib.CalendarItem) -> Room:
         item.required_attendees, collections.abc.Sequence
     )
 
+    email: str
+
     if (resources := item.resources) is not None and len(resources):
         # Usually, there's only one item in resources list
         attendee = resources[0]
+        mailbox = attendee.mailbox
+
+        assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
+        email = str(mailbox.email_address)
     elif (attendees := item.required_attendees) is not None and len(attendees):
         # Usually, if the room itself is placed as the last attendee.
         attendee = attendees[-1]
-    else:
+        mailbox = attendee.mailbox
+
+        assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
+        _email = str(mailbox.email_address)
+
+        if _email.startswith("iu.resource"):
+            email = _email
+        else:
+            # FIXME(metafates): this is a huge hack.
+            # Works with the following format only:
+            #
+            # University Room #321 (Lecture Room x48)
+            # University Room #3.1 (Meeting Room) (? not sure about that)
+            location = str(item.location).lower()
+            matches = re.findall(r"#\d(.\d|\d)*", location)
+
+            if not len(matches):
+                raise MissingCalendarItemFieldException("room")
+
+            room_number = matches[0]
+
+            if "lecture" in location:
+                email = f"iu.resource.lectureroom{room_number}@innopolis.ru"
+            else:
+                email = f"iu.resource.meetingroom.{room_number}@innopolis.ru"
+    else:  # TODO: try parsing location here
         raise MissingCalendarItemFieldException("room")
-
-    mailbox = attendee.mailbox
-
-    assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
-    email_address = mailbox.email_address
-
-    email = str(email_address)
 
     # TODO(metafates): get the names somehow?
     # We probobaly need a database for that, so not possible for now
@@ -141,7 +167,8 @@ def calendar_item_to_booking(item: exchangelib.CalendarItem) -> BookingWithId:
 
     subject = item.subject
     if subject is None:
-        raise MissingCalendarItemFieldException("subject")
+        # TODO(metafates): a better default value?
+        subject = "No Subject"
 
     title = str(subject)
 
@@ -156,6 +183,13 @@ def calendar_item_to_booking(item: exchangelib.CalendarItem) -> BookingWithId:
         title=title,
         room=room,
     )
+
+
+def is_possible_booking(item: exchangelib.CalendarItem) -> bool:
+    if item.is_recurring:
+        return False
+
+    return True
 
 
 class Outlook(BookingsRepo):
@@ -239,7 +273,14 @@ class Outlook(BookingsRepo):
         for item in items_in_period:
             assert isinstance(item, exchangelib.CalendarItem)
 
-            booking = calendar_item_to_booking(item)
+            if not is_possible_booking(item):
+                continue
+
+            try:
+                booking = calendar_item_to_booking(item)
+            except InvalidCalendarItemException as e:
+                logging.warn(f"Invalid calendar item: {e}")
+                continue
 
             if filter_rooms is not None and booking.room not in filter_rooms:
                 continue
