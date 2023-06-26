@@ -210,6 +210,7 @@ class Outlook(BookingsRepo):
         return await loop.run_in_executor(self._executor, self._create_booking, booking)
 
     def _create_booking(self, booking: Booking) -> BookingId:
+        # TODO(metafates): add proper fields
         item = exchangelib.CalendarItem(
             account=self._account,
             folder=self._account.calendar,
