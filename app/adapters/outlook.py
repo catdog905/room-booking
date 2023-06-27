@@ -161,7 +161,7 @@ class Adapter(BookingsRepo):
 
         def room_to_account(room: Room) -> exchangelib.Account:
             # Just to make sure
-            # assert bookable.ROOMS.get_by_email(room.email) is not None
+            assert self._bookable_rooms.get_by_email(room.email) is not None
 
             return exchangelib.Account(
                 primary_smtp_address=room.email,
