@@ -170,7 +170,7 @@ class Adapter(BookingsRepo):
                 access_type=exchangelib.IMPERSONATION,
             )
 
-        # FIXME: this is a super dumb and slow solution just to get the idea
+        # FIXME(metafates): this is a super dumb and slow solution just to get the idea
         if filter_rooms is not None:
             for room, account in zip(filter_rooms, map(room_to_account, filter_rooms)):
                 logging.info(
@@ -180,8 +180,8 @@ class Adapter(BookingsRepo):
                 items_in_period.extend(items)
 
         bookings: list[BookingWithId] = []
+        bookings_ids: set[str] = set()
 
-        # TODO(metafates): get unique items by ID
         for item in items_in_period:
             try:
                 booking = self._calendar_item_to_booking(item)
@@ -195,6 +195,10 @@ class Adapter(BookingsRepo):
             ):
                 continue
 
+            if booking.id in bookings_ids:
+                continue
+
+            bookings_ids.add(booking.id)
             bookings.append(booking)
 
         return bookings
