@@ -1,189 +1,73 @@
 import concurrent.futures
 import asyncio
 import logging
-import re
+from typing import TypedDict, Unpack
 import exchangelib
 import exchangelib.recurrence
 import collections.abc
 from datetime import datetime
 
-import app.domain.dependencies.bookable as bookable
+from app.domain.dependencies import BookingsRepo
 
 from app.domain.entities import Booking, TimePeriod, Room, User
-from app.domain.dependencies import BookingsRepo
 from app.domain.entities.booking import BookingId, BookingWithId, TimeStamp
 from app.domain.entities.common import Language
 
 
-class InvalidCalendarItemException(Exception):
+class InvalidCalendarItemError(Exception):
     def __init__(self, message: str) -> None:
         super().__init__(message)
 
 
-class MissingCalendarItemFieldException(InvalidCalendarItemException):
+class MissingCalendarItemFieldError(InvalidCalendarItemError):
     def __init__(self, field: str) -> None:
         super().__init__(f"Missing field: {field}")
 
 
-def calendar_item_owner(item: exchangelib.CalendarItem) -> User:
-    # We have to deal with two* cases here
-    #
-    # 1. Some meetings has owner (the actual user that booked the room)
-    #    in the `required_attendes` field
-    #   a. Usually as the second one, the first one is the booking system itself
-    #   b. But very rarely the owner can be the first one, so we check
-    #      so we check condition (a) and if it fails try (b)
-    # 2. Other meetings (usually old ones) has owner in the `organizer`
-    #    field. So if (1) fails, try this
+class _Rooms:
+    """
+    The efficient way to get/check rooms by email or name.
+    All operations are done in O(1)
+    """
 
-    assert item.required_attendees is None or isinstance(
-        item.required_attendees, collections.abc.Sequence
-    )
+    _email = str
+    _name = str
 
-    assert item.organizer is None or isinstance(item.organizer, exchangelib.Mailbox)
+    _rooms_dict_email: dict[_email, Room]
+    _rooms_dict_name: dict[_name, Room]
+    _rooms_list: list[Room]
 
-    mailbox: exchangelib.Mailbox
-    if (attendees := item.required_attendees) is not None and len(attendees):
-        attendee: exchangelib.Attendee
-        if len(attendees) > 1:
-            attendee = attendees[1]
-        else:
-            attendee = attendees[0]
+    def __init__(self, rooms: list[Room]) -> None:
+        self._rooms_dict_email = {}
+        self._rooms_dict_name = {}
+        self._rooms_list = rooms
 
-        assert isinstance(attendee.mailbox, exchangelib.Mailbox)
-        mailbox = attendee.mailbox
-    elif (organizer := item.organizer) is not None:
-        mailbox = organizer
-    else:
-        raise MissingCalendarItemFieldException("owner")
+        for room in rooms:
+            self._rooms_dict_email[room.email] = room
+            for language in Language:
+                self._rooms_dict_name[room.get_name(language)] = room
 
-    email_address = str(mailbox.email_address)
-    return User(email_address)
+    def get_by_email(self, email: _email) -> Room | None:
+        return self._rooms_dict_email.get(email)
+
+    def get_by_name(self, name: str) -> Room | None:
+        return self._rooms_dict_name.get(name)
 
 
-def calendar_item_time_period(item: exchangelib.CalendarItem) -> TimePeriod:
-    def ews_datetime_to_timestamp(
-        ews: exchangelib.items.calendar_item.DateOrDateTimeField,
-    ) -> TimeStamp:
-        if isinstance(ews, exchangelib.EWSDateTime):
-            return TimeStamp(
-                datetime_utc=datetime(
-                    year=ews.year,
-                    month=ews.month,
-                    day=ews.month,
-                    hour=ews.hour,
-                    minute=ews.minute,
-                )
-            )
-
-        if isinstance(ews, exchangelib.EWSDate):
-            return TimeStamp(
-                datetime_utc=datetime(
-                    year=ews.year,
-                    month=ews.month,
-                    day=ews.month,
-                )
-            )
-
-        raise InvalidCalendarItemException("Unknown date type")
-
-    if item.start is None:
-        # TODO(metafates): improve these error messages
-        raise MissingCalendarItemFieldException("start")
-
-    if item.end is None:
-        # TODO(metafates): improve these error messages
-        raise MissingCalendarItemFieldException("end")
-
-    start = ews_datetime_to_timestamp(item.start)
-    end = ews_datetime_to_timestamp(item.end)
-
-    return TimePeriod(start, end)
+class Config(TypedDict):
+    account: exchangelib.Account
+    account_config: exchangelib.Configuration
+    bookable_rooms: list[Room]
+    executor: concurrent.futures.ThreadPoolExecutor | None
 
 
-def calendar_item_room(item: exchangelib.CalendarItem) -> Room:
-    # Here we have to deal with two cases
-    #
-    # 1. Sometimes room is in `resources` field (makes sense)
-    # 2. Sometimes it's in the `required_attendees` field (oh god why????)
-    # 3. And... sometimes it's in the `location` without any further information
+class Adapter(BookingsRepo):
+    def __init__(self, **kwargs: Unpack[Config]) -> None:
+        self._account = kwargs["account"]
+        self._account_config = kwargs["account_config"]
+        self._bookable_rooms = _Rooms(kwargs["bookable_rooms"])
 
-    assert item.resources is None or isinstance(
-        item.resources, collections.abc.Sequence
-    )
-
-    assert item.required_attendees is None or isinstance(
-        item.required_attendees, collections.abc.Sequence
-    )
-
-    if (resources := item.resources) is not None and len(resources):
-        for resource in resources:
-            assert isinstance(resource, exchangelib.Attendee)
-
-            mailbox = resource.mailbox
-            assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
-
-            email = str(mailbox.email_address)
-
-            if (room := bookable.ROOMS.get_by_email(email)) is not None:
-                return Room.from_bookable_room(room)
-
-    if (attendees := item.required_attendees) is not None and len(attendees):
-        # Usually, if the room itself is placed as the last attendee.
-        for attendee in attendees:
-            assert isinstance(attendee, exchangelib.Attendee)
-
-            mailbox = attendee.mailbox
-            assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
-
-            email = str(mailbox.email_address)
-
-            if (room := bookable.ROOMS.get_by_email(email)) is not None:
-                return Room.from_bookable_room(room)
-
-    if (location := item.location) is not None:
-        name = str(location)
-
-        if (room := bookable.ROOMS.get_by_name(name)) is not None:
-            return Room.from_bookable_room(room)
-
-    raise MissingCalendarItemFieldException("room")
-
-
-def calendar_item_to_booking(item: exchangelib.CalendarItem) -> BookingWithId:
-    id = item.id
-    if id is None:
-        raise MissingCalendarItemFieldException("id")
-
-    id = BookingId(id)
-
-    subject = item.subject
-    if subject is None:
-        # TODO(metafates): a better default value?
-        subject = "No Subject"
-
-    title = str(subject)
-
-    owner = calendar_item_owner(item)
-    period = calendar_item_time_period(item)
-    room = calendar_item_room(item)
-
-    return BookingWithId(
-        id=id,
-        owner=owner,
-        period=period,
-        title=title,
-        room=room,
-    )
-
-
-class Outlook(BookingsRepo):
-    def __init__(
-        self,
-        account: exchangelib.Account,
-        executor: concurrent.futures.ThreadPoolExecutor | None = None,
-    ) -> None:
-        self._account = account
+        executor = kwargs["executor"]
 
         if executor is None:
             executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
@@ -195,9 +79,6 @@ class Outlook(BookingsRepo):
         return await loop.run_in_executor(self._executor, self._create_booking, booking)
 
     def _create_booking(self, booking: Booking) -> BookingId:
-        # TODO(metafates): add proper fields
-
-        # Here we try to satisfy all legacy systems
         item = exchangelib.CalendarItem(
             account=self._account,
             folder=self._account.calendar,
@@ -205,6 +86,7 @@ class Outlook(BookingsRepo):
             end=booking.period.end.datetime,
             subject=booking.title,
             location=booking.room.get_name(Language.EN),
+            body=f"Booking on request from {booking.owner.email}",
             required_attendees=[
                 exchangelib.Attendee(
                     mailbox=exchangelib.Mailbox(
@@ -234,7 +116,7 @@ class Outlook(BookingsRepo):
             except Exception as e:
                 logging.warn(f"Error while reverting booking: {e}")
 
-            raise MissingCalendarItemFieldException("id")
+            raise MissingCalendarItemFieldError("id")
 
         return item.id
 
@@ -271,22 +153,40 @@ class Outlook(BookingsRepo):
         filter_user_email: str | None = None,
     ) -> list[BookingWithId]:
         # TODO(metafates): assertion magic so that pyright will stop complaining about this
-        items_in_period = self._account.calendar.filter(  # type: ignore
-            start__range=(period.start.datetime, period.end.datetime)
+        items_in_period: list[exchangelib.CalendarItem] = list(
+            self._account.calendar.view(  # type: ignore
+                start=period.start.datetime, end=period.end.datetime
+            )
         )
+
+        def room_to_account(room: Room) -> exchangelib.Account:
+            # Just to make sure
+            # assert bookable.ROOMS.get_by_email(room.email) is not None
+
+            return exchangelib.Account(
+                primary_smtp_address=room.email,
+                config=self._account_config,
+                autodiscover=False,
+                access_type=exchangelib.IMPERSONATION,
+            )
+
+        # FIXME: this is a super dumb and slow solution just to get the idea
+        if filter_rooms is not None:
+            for room, account in zip(filter_rooms, map(room_to_account, filter_rooms)):
+                logging.info(
+                    f"Getting calendar items for room {room.get_name(Language.EN)}"
+                )
+                items = account.calendar.view(start=period.start.datetime, end=period.end.datetime).all()  # type: ignore
+                items_in_period.extend(items)
 
         bookings: list[BookingWithId] = []
 
+        # TODO(metafates): get unique items by ID
         for item in items_in_period:
-            assert isinstance(item, exchangelib.CalendarItem)
-
             try:
-                booking = calendar_item_to_booking(item)
-            except InvalidCalendarItemException as e:
+                booking = self._calendar_item_to_booking(item)
+            except InvalidCalendarItemError as e:
                 logging.warn(f"Invalid calendar item: {e}")
-                continue
-
-            if filter_rooms is not None and booking.room not in filter_rooms:
                 continue
 
             if (
@@ -308,4 +208,153 @@ class Outlook(BookingsRepo):
     def _get_booking_owner(self, booking_id: BookingId) -> User:
         # TODO(metafates): assertion magic so that pyright will stop complaining about this
         calendar_item = self._account.calendar.get(id=booking_id)  # type: ignore
-        return calendar_item_owner(calendar_item)
+        return self._calendar_item_owner(calendar_item)
+
+    def _calendar_item_to_booking(
+        self, item: exchangelib.CalendarItem
+    ) -> BookingWithId:
+        id = item.id
+        if id is None:
+            raise MissingCalendarItemFieldError("id")
+
+        id = BookingId(id)
+
+        subject = item.subject
+        if subject is None:
+            # TODO(metafates): a better default value?
+            subject = "No Subject"
+
+        title = str(subject)
+
+        owner = self._calendar_item_owner(item)
+        period = self._calendar_item_time_period(item)
+        room = self._calendar_item_room(item)
+
+        return BookingWithId(
+            id=id,
+            owner=owner,
+            period=period,
+            title=title,
+            room=room,
+        )
+
+    def _calendar_item_owner(self, item: exchangelib.CalendarItem) -> User:
+        # We have to deal with two* cases here
+        #
+        # 1. Some meetings has owner (the actual user that booked the room)
+        #    in the `required_attendes` field
+        #   a. Usually as the second one, the first one is the booking system itself
+        #   b. But very rarely the owner can be the first one, so we check
+        #      so we check condition (a) and if it fails try (b)
+        # 2. Other meetings (usually old ones) has owner in the `organizer`
+        #    field. So if (1) fails, try this
+
+        assert item.required_attendees is None or isinstance(
+            item.required_attendees, collections.abc.Sequence
+        )
+
+        assert item.organizer is None or isinstance(item.organizer, exchangelib.Mailbox)
+
+        mailbox: exchangelib.Mailbox
+        if (attendees := item.required_attendees) is not None and len(attendees):
+            attendee: exchangelib.Attendee
+            if len(attendees) > 1:
+                attendee = attendees[1]
+            else:
+                attendee = attendees[0]
+
+            assert isinstance(attendee.mailbox, exchangelib.Mailbox)
+            mailbox = attendee.mailbox
+        elif (organizer := item.organizer) is not None:
+            mailbox = organizer
+        else:
+            raise MissingCalendarItemFieldError("owner")
+
+        email_address = str(mailbox.email_address)
+        return User(email_address)
+
+    def _calendar_item_time_period(self, item: exchangelib.CalendarItem) -> TimePeriod:
+        def ews_datetime_to_timestamp(
+            ews: exchangelib.items.calendar_item.DateOrDateTimeField,
+        ) -> TimeStamp:
+            if isinstance(ews, exchangelib.EWSDateTime):
+                return TimeStamp(
+                    datetime_utc=datetime(
+                        year=ews.year,
+                        month=ews.month,
+                        day=ews.day,
+                        hour=ews.hour,
+                        minute=ews.minute,
+                    )
+                )
+
+            if isinstance(ews, exchangelib.EWSDate):
+                return TimeStamp(
+                    datetime_utc=datetime(
+                        year=ews.year,
+                        month=ews.month,
+                        day=ews.day,
+                    )
+                )
+
+            raise InvalidCalendarItemError("Unknown date type")
+
+        if item.start is None:
+            # TODO(metafates): improve these error messages
+            raise MissingCalendarItemFieldError("start")
+
+        if item.end is None:
+            # TODO(metafates): improve these error messages
+            raise MissingCalendarItemFieldError("end")
+
+        start = ews_datetime_to_timestamp(item.start)
+        end = ews_datetime_to_timestamp(item.end)
+
+        return TimePeriod(start, end)
+
+    def _calendar_item_room(self, item: exchangelib.CalendarItem) -> Room:
+        # Here we have to deal with three cases
+        #
+        # 1. Sometimes room is in `resources` field
+        # 2. Sometimes it's in the `required_attendees` field
+        # 3. And... sometimes it's in the `location` without any further information
+
+        assert item.resources is None or isinstance(
+            item.resources, collections.abc.Sequence
+        )
+
+        assert item.required_attendees is None or isinstance(
+            item.required_attendees, collections.abc.Sequence
+        )
+
+        if (resources := item.resources) is not None and len(resources):
+            for resource in resources:
+                assert isinstance(resource, exchangelib.Attendee)
+
+                mailbox = resource.mailbox
+                assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
+
+                email = str(mailbox.email_address)
+
+                if (room := self._bookable_rooms.get_by_email(email)) is not None:
+                    return room
+
+        if (attendees := item.required_attendees) is not None and len(attendees):
+            for attendee in attendees:
+                assert isinstance(attendee, exchangelib.Attendee)
+
+                mailbox = attendee.mailbox
+                assert mailbox is not None and isinstance(mailbox, exchangelib.Mailbox)
+
+                email = str(mailbox.email_address)
+
+                if (room := self._bookable_rooms.get_by_email(email)) is not None:
+                    return room
+
+        if (location := item.location) is not None:
+            name = str(location)
+
+            if (room := self._bookable_rooms.get_by_name(name)) is not None:
+                return room
+
+        raise MissingCalendarItemFieldError("room")

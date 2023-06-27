@@ -4,8 +4,6 @@ __all__ = ["Room", "TimeStamp", "TimePeriod", "Booking", "BookingWithId", "Booki
 from typing import assert_never, TypedDict, Unpack
 from datetime import datetime, UTC
 
-import app.domain.dependencies.bookable as bookable
-
 from .common import Language
 from .iam import User
 
@@ -36,12 +34,6 @@ class Room:
                 return self._name_ru
             case _:
                 assert_never(lang)
-
-    @staticmethod
-    def from_bookable_room(bookable: bookable.Room) -> "Room":
-        return Room(
-            email=bookable.email, name_en=bookable.name_en, name_ru=bookable.name_ru
-        )
 
 
 class TimeStamp:
