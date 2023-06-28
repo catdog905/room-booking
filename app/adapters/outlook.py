@@ -11,16 +11,8 @@ import exchangelib
 import exchangelib.recurrence
 
 from app.domain.dependencies import BookingsRepo
-from app.domain.entities import (
-    Booking,
-    TimePeriod,
-    Room,
-    User,
-    BookingId,
-    BookingWithId,
-    TimeStamp,
-    Language,
-)
+from app.domain.entities import (Booking, BookingId, BookingWithId, Language,
+                                 Room, TimePeriod, TimeStamp, User)
 
 DEFAULT_BOOKING_TITLE = "Untitled"
 
@@ -66,7 +58,7 @@ class OutlookBookings(BookingsRepo):
     def __init__(self, **kwargs: Unpack[BookingsDict]):
         self._account = kwargs["account"]
         self._account_config = kwargs["account_config"]
-        self._rooms = RoomsRegistry(kwargs["rooms_registry"])
+        self._rooms = kwargs["rooms_registry"]
 
         executor = kwargs["executor"]
         if executor is None:
@@ -165,10 +157,10 @@ class OutlookBookings(BookingsRepo):
                 logging.info(
                     f"Getting calendar items for room {room.get_name(Language.EN)}"
                 )
-                items = account.calendar.view(
+                items = account.calendar.view(  # type: ignore
                     start=period.start.datetime,
                     end=period.end.datetime,
-                ).all()  # type: ignore
+                ).all()
                 items_in_period.extend(items)
 
         bookings: list[BookingWithId] = []
