@@ -1,3 +1,5 @@
+__all__ = ["Language"]
+
 from enum import StrEnum
 
 
