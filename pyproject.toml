@@ -16,9 +16,13 @@ uvicorn = {extras = ["standard"], version = "^0.22.0"}
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
 pyright = "^1.1.314"
+isort = "^5.12.0"
 
 [tool.pyright]
 include = ["app"]
+
+[tool.isort]
+profile = "black"
 
 [build-system]
 requires = ["poetry-core"]
