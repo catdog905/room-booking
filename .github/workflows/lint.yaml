@@ -9,17 +9,10 @@ on:
       - main
 
 jobs:
-  lint-black:
+  lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Lint with Black
-        uses: psf/black@stable
-  lint-pyright:
-    if: '!cancelled()' # Run even if `lint-black` fails
-    runs-on: ubuntu-latest
-    steps:
+      ### Setup environment
       - name: Checkout repository
         uses: actions/checkout@v3
       - name: Setup Python
@@ -40,7 +33,16 @@ jobs:
           path: .venv
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
       - name: Install dependencies
+        id: install-dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root
+      ### Run linters (independently)
       - name: Lint with Pyright
         run: poetry run pyright
+        if: steps.install-dependencies.outcome == 'skipped' || steps.install-dependencies.outcome == 'success'
+      - name: Check code-style with Black
+        run: poetry run black --check ./app
+        if: steps.install-dependencies.outcome == 'skipped' || steps.install-dependencies.outcome == 'success'
+      - name: Check imports order with isort
+        run: poetry run isort -c ./app
+        if: steps.install-dependencies.outcome == 'skipped' || steps.install-dependencies.outcome == 'success'
