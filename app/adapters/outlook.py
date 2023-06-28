@@ -89,13 +89,8 @@ class Adapter(BookingsRepo):
             body=f"Booking on request from {booking.owner.email}",
             required_attendees=[
                 exchangelib.Attendee(
-                    mailbox=exchangelib.Mailbox(
-                        email_address=self._account.primary_smtp_address
-                    )
-                ),
-                exchangelib.Attendee(
                     mailbox=exchangelib.Mailbox(email_address=booking.owner.email),
-                    response_type="Accept",
+                    response_type="Organizer",
                 ),
                 exchangelib.Attendee(
                     mailbox=exchangelib.Mailbox(email_address=booking.room.email),
@@ -159,7 +154,7 @@ class Adapter(BookingsRepo):
             )
         )
 
-        def room_to_account(room: Room) -> exchangelib.Account:
+        def get_ews_account_for_room(room: Room) -> exchangelib.Account:
             # Just to make sure
             assert self._bookable_rooms.get_by_email(room.email) is not None
 
@@ -172,7 +167,9 @@ class Adapter(BookingsRepo):
 
         # FIXME(metafates): this is a super dumb and slow solution just to get the idea
         if filter_rooms is not None:
-            for room, account in zip(filter_rooms, map(room_to_account, filter_rooms)):
+            for room, account in zip(
+                filter_rooms, map(get_ews_account_for_room, filter_rooms)
+            ):
                 logging.info(
                     f"Getting calendar items for room {room.get_name(Language.EN)}"
                 )
@@ -259,23 +256,28 @@ class Adapter(BookingsRepo):
 
         assert item.organizer is None or isinstance(item.organizer, exchangelib.Mailbox)
 
-        mailbox: exchangelib.Mailbox
         if (attendees := item.required_attendees) is not None and len(attendees):
-            attendee: exchangelib.Attendee
-            if len(attendees) > 1:
-                attendee = attendees[1]
-            else:
-                attendee = attendees[0]
+            owner: exchangelib.Attendee
 
-            assert isinstance(attendee.mailbox, exchangelib.Mailbox)
-            mailbox = attendee.mailbox
-        elif (organizer := item.organizer) is not None:
-            mailbox = organizer
-        else:
-            raise MissingCalendarItemFieldError("owner")
+            # Try to find owner by response type
+            for attendee in attendees:
+                if attendee.response_type == "Organizer":
+                    owner = attendee
+                    break
+            else:  # if it fails, try to guess
+                if len(attendees) > 1:
+                    owner = attendees[1]
+                else:
+                    owner = attendees[0]
 
-        email_address = str(mailbox.email_address)
-        return User(email_address)
+            assert isinstance(owner.mailbox, exchangelib.Mailbox)
+
+            return User(str(owner.mailbox.email_address))
+
+        if (organizer := item.organizer) is not None:
+            return User(str(organizer.email_address))
+
+        raise MissingCalendarItemFieldError("owner")
 
     def _calendar_item_time_period(self, item: exchangelib.CalendarItem) -> TimePeriod:
         def ews_datetime_to_timestamp(
@@ -298,6 +300,8 @@ class Adapter(BookingsRepo):
                         year=ews.year,
                         month=ews.month,
                         day=ews.day,
+                        hour=0,
+                        minute=0,
                     )
                 )
 
@@ -317,11 +321,10 @@ class Adapter(BookingsRepo):
         return TimePeriod(start, end)
 
     def _calendar_item_room(self, item: exchangelib.CalendarItem) -> Room:
-        # Here we have to deal with three cases
+        # Here we have to deal with two cases
         #
-        # 1. Sometimes room is in `resources` field
-        # 2. Sometimes it's in the `required_attendees` field
-        # 3. And... sometimes it's in the `location` without any further information
+        # 1. Room is in the `resources` field
+        # 2. Room is in the `required_attendees` field
 
         assert item.resources is None or isinstance(
             item.resources, collections.abc.Sequence
@@ -354,11 +357,5 @@ class Adapter(BookingsRepo):
 
                 if (room := self._bookable_rooms.get_by_email(email)) is not None:
                     return room
-
-        if (location := item.location) is not None:
-            name = str(location)
-
-            if (room := self._bookable_rooms.get_by_name(name)) is not None:
-                return room
 
         raise MissingCalendarItemFieldError("room")
