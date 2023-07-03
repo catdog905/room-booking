@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.config import config, Environment
 from app.api.app import init_app
+from app.config import Environment, config
 
 DEBUG = config.environment == Environment.DEVELOPMENT
 

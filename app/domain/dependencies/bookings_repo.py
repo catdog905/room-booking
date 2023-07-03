@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.domain.entities import Booking, BookingId, TimePeriod, Room, User
+from app.domain.entities import Booking, BookingId, Room, TimePeriod, User
 from app.domain.entities.booking import BookingWithId
 
 

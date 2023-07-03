@@ -1,12 +1,11 @@
 __all__ = ["Room", "TimeStamp", "TimePeriod", "Booking", "BookingWithId", "BookingId"]
 
 
-from typing import assert_never, TypedDict, Unpack
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from typing import TypedDict, Unpack, assert_never
 
 from .common import Language
 from .iam import User
-
 
 BookingId = str
 

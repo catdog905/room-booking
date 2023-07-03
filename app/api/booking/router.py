@@ -1,15 +1,14 @@
-from fastapi import APIRouter, status, Depends
+from fastapi import APIRouter, Depends, status
 
+from ..deps import auth, locale
 from .schemas import (
-    Room,
     Booking,
-    BookRoomRequest,
     BookRoomError,
+    BookRoomRequest,
     GetFreeRoomsRequest,
     QueryBookingsRequest,
+    Room,
 )
-from ..deps import locale, auth
-
 
 unauthorized_responses: dict[int | str, dict[str, str]] = {
     status.HTTP_401_UNAUTHORIZED: {

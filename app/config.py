@@ -2,7 +2,7 @@ __all__ = ["Environment", "Config", "config"]
 
 from enum import StrEnum
 
-from pydantic import BaseSettings, AnyHttpUrl
+from pydantic import AnyHttpUrl, BaseSettings
 
 
 class Environment(StrEnum):
