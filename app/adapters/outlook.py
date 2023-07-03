@@ -11,10 +11,19 @@ import exchangelib
 import exchangelib.recurrence
 
 from app.domain.dependencies import BookingsRepo
-from app.domain.entities import (Booking, BookingId, BookingWithId, Language,
-                                 Room, TimePeriod, TimeStamp, User)
+from app.domain.entities import (
+    Booking,
+    BookingId,
+    BookingWithId,
+    Language,
+    Room,
+    TimePeriod,
+    TimeStamp,
+    User,
+)
 
 DEFAULT_BOOKING_TITLE = "Untitled"
+LEGACY_BOOKING_SYSTEM_EMAIL = "TODO"
 
 
 class InvalidCalendarItemError(Exception):
@@ -36,7 +45,7 @@ class RoomsRegistry:
         self._rooms_by_name_map = {}
 
         for room in rooms:
-            self._rooms_by_name_map[room.email] = room
+            self._rooms_by_email_map[room.email] = room
             for language in Language:
                 self._rooms_by_name_map[room.get_name(language)] = room
 
@@ -231,45 +240,69 @@ def convert_calendar_item_to_booking_with_id(
     )
 
 
-def get_calendar_item_owner(item: exchangelib.CalendarItem) -> User:
-    # We have to deal with two* cases here
-    #
-    # 1. Some meetings have owner (the actual user that booked the room)
-    #    in the `required_attendes` field
-    #   a. Usually as the second one, the first one is the booking system itself
-    #   b. But very rarely the owner can be the first one, so we check
-    #      so we check condition (a) and if it fails try (b)
-    # 2. Other meetings (usually old ones) has owner in the `organizer`
-    #    field. So if (1) fails, try this
-
+def get_calendar_item_organizer_email(item: exchangelib.CalendarItem) -> str | None:
     assert item.required_attendees is None or isinstance(
         item.required_attendees, collections.abc.Sequence
     )
 
     assert item.organizer is None or isinstance(item.organizer, exchangelib.Mailbox)
 
-    if (attendees := item.required_attendees) is not None and len(attendees):
-        owner: exchangelib.Attendee
+    if (organizer := item.organizer) is not None:
+        return str(organizer.email_address)
 
-        # Try to find owner by response type
+    if (attendees := item.required_attendees) is not None and len(attendees) > 0:
+        organizer_email: str | None = None
         for attendee in attendees:
             if attendee.response_type == "Organizer":
-                owner = attendee
-                break
-        else:  # if it fails, try to guess
-            if len(attendees) > 1:
-                owner = attendees[1]
-            else:
-                owner = attendees[0]
+                assert isinstance(attendee.mailbox, exchangelib.Mailbox)
 
-        assert isinstance(owner.mailbox, exchangelib.Mailbox)
+                email = attendee.mailbox.email_address
 
-        return User(str(owner.mailbox.email_address))
+                if organizer_email is not None:
+                    return None
 
-    if (organizer := item.organizer) is not None:
-        return User(str(organizer.email_address))
+                organizer_email = str(email)
 
-    raise MissingCalendarItemFieldError("owner")
+        return organizer_email
+
+    return None
+
+
+def get_calendar_item_owner(item: exchangelib.CalendarItem) -> User:
+    # The problem is that old booking services may appear as organizers,
+    # so we try to filter them out and get the real owner.
+
+    organizer_email = get_calendar_item_organizer_email(item)
+
+    if organizer_email is None:
+        raise MissingCalendarItemFieldError("owner")
+
+    if organizer_email != LEGACY_BOOKING_SYSTEM_EMAIL:
+        return User(organizer_email)
+
+    attendees = item.required_attendees
+
+    if attendees is None:
+        raise MissingCalendarItemFieldError("owner")
+
+    assert isinstance(attendees, collections.abc.Sequence)
+
+    attendee = attendees[0]
+    assert isinstance(attendee, exchangelib.Attendee) and isinstance(
+        attendee.mailbox, exchangelib.Mailbox
+    )
+    if str(attendee.mailbox.email_address) != LEGACY_BOOKING_SYSTEM_EMAIL:
+        raise MissingCalendarItemFieldError("owner")
+
+    if len(attendees) < 2:
+        raise MissingCalendarItemFieldError("owner")
+
+    attendee = attendees[1]
+    assert isinstance(attendee, exchangelib.Attendee) and isinstance(
+        attendee.mailbox, exchangelib.Mailbox
+    )
+
+    return User(str(attendee.mailbox.email_address))
 
 
 def get_calendar_item_time_period(item: exchangelib.CalendarItem) -> TimePeriod:
