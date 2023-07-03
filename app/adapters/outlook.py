@@ -9,7 +9,6 @@ from typing import TypedDict, Unpack
 
 import exchangelib
 import exchangelib.recurrence
-from exchangelib.fields import AttendeesField
 
 from app.domain.dependencies import BookingsRepo
 from app.domain.entities import (
@@ -296,17 +295,21 @@ def get_calendar_item_owner(item: exchangelib.CalendarItem) -> User:
 
     assert isinstance(attendees, collections.abc.Sequence)
 
+    # legacy system creates exactly 3 attendees including itself
+    if len(attendees) != 3:
+        raise MissingCalendarItemFieldError("owner")
+
     attendee = attendees[0]
+
     assert isinstance(attendee, exchangelib.Attendee) and isinstance(
         attendee.mailbox, exchangelib.Mailbox
     )
+
     if str(attendee.mailbox.email_address) != LEGACY_BOOKING_SYSTEM_EMAIL:
         raise MissingCalendarItemFieldError("owner")
 
-    if len(attendees) < 2:
-        raise MissingCalendarItemFieldError("owner")
-
     attendee = attendees[1]
+
     assert isinstance(attendee, exchangelib.Attendee) and isinstance(
         attendee.mailbox, exchangelib.Mailbox
     )
