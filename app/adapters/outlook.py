@@ -3,12 +3,13 @@ __all__ = ["OutlookBookings", "RoomsRegistry"]
 import asyncio
 import collections.abc
 import concurrent.futures
-import logging
 from datetime import datetime
+from logging import getLogger
 from typing import TypedDict, Unpack
 
 import exchangelib
 import exchangelib.recurrence
+from exchangelib.fields import AttendeesField
 
 from app.domain.dependencies import BookingsRepo
 from app.domain.entities import (
@@ -24,6 +25,8 @@ from app.domain.entities import (
 
 DEFAULT_BOOKING_TITLE = "Untitled"
 LEGACY_BOOKING_SYSTEM_EMAIL = "TODO"
+
+logger = getLogger(__name__)
 
 
 class InvalidCalendarItemError(Exception):
@@ -112,7 +115,7 @@ class OutlookBookings(BookingsRepo):
             try:
                 item.delete()
             except Exception as e:
-                logging.warning(f"Error while reverting booking: {e}")
+                logger.warning(f"Error while reverting booking: {e}")
 
             raise MissingCalendarItemFieldError("id")
 
@@ -163,7 +166,7 @@ class OutlookBookings(BookingsRepo):
                 filter_rooms,
                 map(self._get_ews_account_for_room, filter_rooms),
             ):
-                logging.info(
+                logger.info(
                     f"Getting calendar items for room {room.get_name(Language.EN)}"
                 )
                 items = account.calendar.view(  # type: ignore
@@ -179,7 +182,7 @@ class OutlookBookings(BookingsRepo):
             try:
                 booking = convert_calendar_item_to_booking_with_id(item, self._rooms)
             except InvalidCalendarItemError as e:
-                logging.warning(f"Invalid calendar item: {e}")
+                logger.warning(f"Invalid calendar item: {e}")
                 continue
 
             if (
@@ -242,10 +245,14 @@ def convert_calendar_item_to_booking_with_id(
 
 def get_calendar_item_organizer_email(item: exchangelib.CalendarItem) -> str | None:
     assert item.required_attendees is None or isinstance(
-        item.required_attendees, collections.abc.Sequence
+        item.required_attendees,
+        AttendeesField,
     )
 
-    assert item.organizer is None or isinstance(item.organizer, exchangelib.Mailbox)
+    assert item.organizer is None or isinstance(
+        item.organizer,
+        exchangelib.Mailbox,
+    )
 
     if (organizer := item.organizer) is not None:
         return str(organizer.email_address)
