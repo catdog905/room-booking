@@ -246,7 +246,7 @@ def convert_calendar_item_to_booking_with_id(
 def get_calendar_item_organizer_email(item: exchangelib.CalendarItem) -> str | None:
     assert item.required_attendees is None or isinstance(
         item.required_attendees,
-        AttendeesField,
+        collections.abc.Sequence,
     )
 
     assert item.organizer is None or isinstance(
@@ -260,6 +260,8 @@ def get_calendar_item_organizer_email(item: exchangelib.CalendarItem) -> str | N
     if (attendees := item.required_attendees) is not None and len(attendees) > 0:
         organizer_email: str | None = None
         for attendee in attendees:
+            assert isinstance(attendee, exchangelib.Attendee)
+
             if attendee.response_type == "Organizer":
                 assert isinstance(attendee.mailbox, exchangelib.Mailbox)
 
