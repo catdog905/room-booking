@@ -91,6 +91,7 @@ class OutlookBookings(BookingsRepo):
             end=booking.period.end.datetime,
             subject=booking.title,
             location=booking.room.get_name(Language.EN),
+            organizer=exchangelib.Mailbox(email_address=booking.owner.email),
             body=f"Booking on request from {booking.owner.email}",
             required_attendees=[
                 exchangelib.Attendee(
@@ -179,7 +180,9 @@ class OutlookBookings(BookingsRepo):
 
         for item in items_in_period:
             try:
-                booking = convert_calendar_item_to_booking_with_id(item, self._rooms)
+                booking = self._convert_calendar_item_to_booking_with_id(
+                    item, self._rooms
+                )
             except InvalidCalendarItemError as e:
                 logger.warning(f"Invalid calendar item: {e}")
                 continue
@@ -208,7 +211,7 @@ class OutlookBookings(BookingsRepo):
     def get_booking_owner_blocking(self, booking_id: BookingId) -> User:
         # TODO(metafates): assertion magic so that pyright will stop complaining about this
         calendar_item = self._account.calendar.get(id=booking_id)  # type: ignore
-        return get_calendar_item_owner(calendar_item)
+        return self._get_calendar_item_owner(calendar_item)
 
     def _get_ews_account_for_room(self, room: Room) -> exchangelib.Account:
         # Just to make sure
@@ -221,25 +224,69 @@ class OutlookBookings(BookingsRepo):
             access_type=exchangelib.IMPERSONATION,
         )
 
+    def _get_calendar_item_owner(self, item: exchangelib.CalendarItem) -> User:
+        # The problem is that old booking services may appear as organizers,
+        # so we try to filter them out and get the real owner.
 
-def convert_calendar_item_to_booking_with_id(
-    item: exchangelib.CalendarItem,
-    rooms_registry: RoomsRegistry,
-) -> BookingWithId:
-    if item.id is None:
-        raise MissingCalendarItemFieldError("id")
+        organizer_email = get_calendar_item_organizer_email(item)
 
-    owner = get_calendar_item_owner(item)
-    period = get_calendar_item_time_period(item)
-    room = get_calendar_item_room(item, rooms_registry)
+        if organizer_email is None:
+            raise MissingCalendarItemFieldError("owner")
 
-    return BookingWithId(
-        id=BookingId(item.id),
-        title=str(item.subject) or DEFAULT_BOOKING_TITLE,
-        owner=owner,
-        period=period,
-        room=room,
-    )
+        if organizer_email == self._account.primary_smtp_address:
+            # TODO: check types
+            return User(item.required_attendees[0].mailbox.email_address)  # type: ignore
+
+        if organizer_email != LEGACY_BOOKING_SYSTEM_EMAIL:
+            return User(organizer_email)
+
+        attendees = item.required_attendees
+
+        if attendees is None:
+            raise MissingCalendarItemFieldError("owner")
+
+        assert isinstance(attendees, collections.abc.Sequence)
+
+        # legacy system creates exactly 3 attendees including itself
+        if len(attendees) != 3:
+            raise MissingCalendarItemFieldError("owner")
+
+        attendee = attendees[0]
+
+        assert isinstance(attendee, exchangelib.Attendee) and isinstance(
+            attendee.mailbox, exchangelib.Mailbox
+        )
+
+        if str(attendee.mailbox.email_address) != LEGACY_BOOKING_SYSTEM_EMAIL:
+            raise MissingCalendarItemFieldError("owner")
+
+        attendee = attendees[1]
+
+        assert isinstance(attendee, exchangelib.Attendee) and isinstance(
+            attendee.mailbox, exchangelib.Mailbox
+        )
+
+        return User(str(attendee.mailbox.email_address))
+
+    def _convert_calendar_item_to_booking_with_id(
+        self,
+        item: exchangelib.CalendarItem,
+        rooms_registry: RoomsRegistry,
+    ) -> BookingWithId:
+        if item.id is None:
+            raise MissingCalendarItemFieldError("id")
+
+        owner = self._get_calendar_item_owner(item)
+        period = get_calendar_item_time_period(item)
+        room = get_calendar_item_room(item, rooms_registry)
+
+        return BookingWithId(
+            id=BookingId(item.id),
+            title=str(item.subject) or DEFAULT_BOOKING_TITLE,
+            owner=owner,
+            period=period,
+            room=room,
+        )
 
 
 def get_calendar_item_organizer_email(item: exchangelib.CalendarItem) -> str | None:
@@ -274,47 +321,6 @@ def get_calendar_item_organizer_email(item: exchangelib.CalendarItem) -> str | N
         return organizer_email
 
     return None
-
-
-def get_calendar_item_owner(item: exchangelib.CalendarItem) -> User:
-    # The problem is that old booking services may appear as organizers,
-    # so we try to filter them out and get the real owner.
-
-    organizer_email = get_calendar_item_organizer_email(item)
-
-    if organizer_email is None:
-        raise MissingCalendarItemFieldError("owner")
-
-    if organizer_email != LEGACY_BOOKING_SYSTEM_EMAIL:
-        return User(organizer_email)
-
-    attendees = item.required_attendees
-
-    if attendees is None:
-        raise MissingCalendarItemFieldError("owner")
-
-    assert isinstance(attendees, collections.abc.Sequence)
-
-    # legacy system creates exactly 3 attendees including itself
-    if len(attendees) != 3:
-        raise MissingCalendarItemFieldError("owner")
-
-    attendee = attendees[0]
-
-    assert isinstance(attendee, exchangelib.Attendee) and isinstance(
-        attendee.mailbox, exchangelib.Mailbox
-    )
-
-    if str(attendee.mailbox.email_address) != LEGACY_BOOKING_SYSTEM_EMAIL:
-        raise MissingCalendarItemFieldError("owner")
-
-    attendee = attendees[1]
-
-    assert isinstance(attendee, exchangelib.Attendee) and isinstance(
-        attendee.mailbox, exchangelib.Mailbox
-    )
-
-    return User(str(attendee.mailbox.email_address))
 
 
 def get_calendar_item_time_period(item: exchangelib.CalendarItem) -> TimePeriod:
