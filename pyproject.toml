@@ -12,6 +12,7 @@ python = "^3.11"
 fastapi = "^0.97.0"
 exchangelib = "^5.0.3"
 uvicorn = {extras = ["standard"], version = "^0.22.0"}
+pytest = "^7.4.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
@@ -23,6 +24,11 @@ include = ["app"]
 
 [tool.isort]
 profile = "black"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
 
 [build-system]
 requires = ["poetry-core"]
