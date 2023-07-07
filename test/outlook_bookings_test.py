@@ -89,17 +89,27 @@ def random_time_period() -> TimePeriod:
 
 def test_booking_create_and_delete():
     owner = User("user@example.com")
+    period = random_time_period()
+    room = random.choice(rooms)
     booking = Booking(
         title=f"Test Booking {uuid4().hex}",
-        period=random_time_period(),
+        period=period,
         room=random.choice(rooms),
         owner=owner,
     )
 
     booking_id = adapter.create_booking_blocking(booking)
-    print(booking_id)
 
     assert owner.email == adapter.get_booking_owner_blocking(booking_id).email
+
+    bookings_in_period = adapter.get_bookings_in_period_blocking(
+        period=period, filter_rooms=[room], filter_user_email=owner.email
+    )
+
+    assert len(bookings_in_period) == 1
+
+    assert bookings_in_period[0].id == booking_id
+    assert bookings_in_period[0].owner.email == owner.email
 
     adapter.delete_booking_blocking(booking_id)
 
