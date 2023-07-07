@@ -1,5 +1,12 @@
+import concurrent
+from typing import Annotated
+
+import exchangelib
 from fastapi import APIRouter, Depends, status
 
+from ...adapters.outlook import OutlookBookings, RoomsRegistry
+from ...config import config
+from ...config import bookable_rooms
 from ..deps import auth, locale
 from .schemas import (
     Booking,
@@ -7,15 +14,15 @@ from .schemas import (
     BookRoomRequest,
     GetFreeRoomsRequest,
     QueryBookingsRequest,
-    Room,
+    RoomSchema,
 )
+from ...domain.entities import Language, Room, TimePeriod, TimeStamp
 
 unauthorized_responses: dict[int | str, dict[str, str]] = {
     status.HTTP_401_UNAUTHORIZED: {
         "description": "API token was not provided, is invalid or has been expired",
     }
 }
-
 
 router = APIRouter(
     tags=["Booking"],
@@ -29,8 +36,10 @@ router = APIRouter(
     name="Get all bookable rooms",
     operation_id="get_rooms",
 )
-async def get_rooms() -> list[Room]:
-    raise NotImplementedError
+async def get_rooms(
+        language: Annotated[Language, Depends(locale)]
+) -> list[RoomSchema]:
+    return list(map(lambda room: RoomSchema.from_room(room, language), bookable_rooms))
 
 
 @router.post(
@@ -38,10 +47,37 @@ async def get_rooms() -> list[Room]:
     name="Get free rooms",
     operation_id="get_free_rooms",
     description="Returns a list of rooms that are available for booking at the"
-    " specified time period.",
+                " specified time period.",
 )
-async def get_free_rooms(req: GetFreeRoomsRequest) -> list[Room]:
-    raise NotImplementedError
+async def get_free_rooms(req: GetFreeRoomsRequest, language: Annotated[Language, Depends(locale)]) -> list[RoomSchema]:
+    credentials = exchangelib.OAuth2Credentials(
+        client_id=config.app_client_id,
+        client_secret=config.app_secret,
+        tenant_id=config.app_tenant_id,
+        identity=exchangelib.Identity(primary_smtp_address=config.outlook_email),
+    )
+    server_config = exchangelib.Configuration(
+        server="outlook.office365.com",
+        credentials=credentials,
+        auth_type=exchangelib.OAUTH2,
+    )
+    account = exchangelib.Account(
+        primary_smtp_address=config.outlook_email,
+        config=server_config,
+        autodiscover=False,
+        access_type=exchangelib.DELEGATE,
+    )
+    adapter = OutlookBookings(
+        account=account,
+        account_config=server_config,
+        rooms_registry=RoomsRegistry(bookable_rooms),
+        executor=None
+    )
+    bookings = await adapter.get_bookings_in_period(period=TimePeriod(
+        start=TimeStamp(req.start),
+        end=TimeStamp(req.end)))
+    print(list(map(lambda booking: booking.__dict__, bookings)))
+    return "hello"
 
 
 @router.post(
@@ -55,7 +91,7 @@ async def get_free_rooms(req: GetFreeRoomsRequest) -> list[Room]:
         },
         status.HTTP_400_BAD_REQUEST: {
             "description": "This room cannot be booked for this user during"
-            " this time period",
+                           " this time period",
             "model": BookRoomError,
         },
     },

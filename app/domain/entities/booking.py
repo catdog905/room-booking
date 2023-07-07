@@ -1,7 +1,7 @@
 __all__ = ["Room", "TimeStamp", "TimePeriod", "Booking", "BookingWithId", "BookingId"]
 
-
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import TypedDict, Unpack, assert_never
 
 from .common import Language
@@ -10,16 +10,27 @@ from .iam import User
 BookingId = str
 
 
+class RoomType(StrEnum):
+    MEETING_ROOM = "MEETING_ROOM"
+    AUDITORIUM = "AUDITORIUM"
+
+
 class Room:
     def __init__(
-        self,
-        email: str,
-        name_en: str,
-        name_ru: str,
+            self,
+            id: str,
+            capacity: int,
+            email: str,
+            name_en: str,
+            name_ru: str,
+            room_type: RoomType
     ):
+        self.id = id
+        self.capacity = capacity
         self._email = email
         self._name_en = name_en
         self._name_ru = name_ru
+        self.room_type = room_type
 
     @property
     def email(self):
@@ -83,8 +94,8 @@ class BookingDict(TypedDict):
 
 class Booking:
     def __init__(
-        self,
-        **kwargs: Unpack[BookingDict],
+            self,
+            **kwargs: Unpack[BookingDict],
     ):
         self._title = kwargs["title"]
         self._period = kwargs["period"]
@@ -114,8 +125,8 @@ class BookingWithIdDict(BookingDict):
 
 class BookingWithId(Booking):
     def __init__(
-        self,
-        **kwargs: Unpack[BookingWithIdDict],
+            self,
+            **kwargs: Unpack[BookingWithIdDict],
     ):
         super().__init__(**kwargs)
         self._id = kwargs["id"]

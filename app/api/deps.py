@@ -3,7 +3,9 @@ from typing import Annotated
 from fastapi import Depends, Header
 from fastapi.security import APIKeyHeader
 
-DEFAULT_LOCALE = "en-US"
+from app.domain.entities import Language
+
+DEFAULT_LOCALE = Language.EN
 
 
 auth_scheme = APIKeyHeader(name="Authorization", scheme_name="Bearer")
@@ -22,7 +24,11 @@ def locale(
             example="ru-RU",
         ),
     ] = DEFAULT_LOCALE,
-) -> str:
+) -> Language:
     if accept_language is None:
         return DEFAULT_LOCALE
-    return accept_language
+    if accept_language == "ru-RU":
+        return Language.RU
+    if accept_language == "en-EN":
+        return Language.EN
+    return DEFAULT_LOCALE
