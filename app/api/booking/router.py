@@ -1,22 +1,24 @@
 import concurrent
-from typing import Annotated
+from typing import Annotated, Optional
 
 import exchangelib
 from fastapi import APIRouter, Depends, status
+
+from .api_exceptions.such_room_does_not_exist_error import SuchRoomDoesNotExistError
 
 from ...adapters.outlook import OutlookBookings, RoomsRegistry
 from ...config import config
 from ...config import bookable_rooms
 from ..deps import auth, locale
 from .schemas import (
-    Booking,
     BookRoomError,
     BookRoomRequest,
     GetFreeRoomsRequest,
     QueryBookingsRequest,
     RoomSchema,
+    BookingWithIdSchema,
 )
-from ...domain.entities import Language, Room, TimePeriod, TimeStamp
+from ...domain.entities import Language, Room, TimePeriod, TimeStamp, Booking, User, BookingWithId
 
 unauthorized_responses: dict[int | str, dict[str, str]] = {
     status.HTTP_401_UNAUTHORIZED: {
@@ -30,6 +32,29 @@ router = APIRouter(
     responses=unauthorized_responses,
 )
 
+credentials = exchangelib.OAuth2Credentials(
+        client_id=config.app_client_id,
+        client_secret=config.app_secret,
+        tenant_id=config.app_tenant_id,
+        identity=exchangelib.Identity(primary_smtp_address=config.outlook_email),
+    )
+server_config = exchangelib.Configuration(
+    server="outlook.office365.com",
+    credentials=credentials,
+    auth_type=exchangelib.OAUTH2,
+)
+account = exchangelib.Account(
+    primary_smtp_address=config.outlook_email,
+    config=server_config,
+    autodiscover=False,
+    access_type=exchangelib.DELEGATE,
+)
+adapter = OutlookBookings(
+    account=account,
+    account_config=server_config,
+    rooms_registry=RoomsRegistry(bookable_rooms),
+    executor=None
+)
 
 @router.get(
     "/rooms",
@@ -49,35 +74,15 @@ async def get_rooms(
     description="Returns a list of rooms that are available for booking at the"
                 " specified time period.",
 )
-async def get_free_rooms(req: GetFreeRoomsRequest, language: Annotated[Language, Depends(locale)]) -> list[RoomSchema]:
-    credentials = exchangelib.OAuth2Credentials(
-        client_id=config.app_client_id,
-        client_secret=config.app_secret,
-        tenant_id=config.app_tenant_id,
-        identity=exchangelib.Identity(primary_smtp_address=config.outlook_email),
-    )
-    server_config = exchangelib.Configuration(
-        server="outlook.office365.com",
-        credentials=credentials,
-        auth_type=exchangelib.OAUTH2,
-    )
-    account = exchangelib.Account(
-        primary_smtp_address=config.outlook_email,
-        config=server_config,
-        autodiscover=False,
-        access_type=exchangelib.DELEGATE,
-    )
-    adapter = OutlookBookings(
-        account=account,
-        account_config=server_config,
-        rooms_registry=RoomsRegistry(bookable_rooms),
-        executor=None
-    )
-    bookings = await adapter.get_bookings_in_period(period=TimePeriod(
-        start=TimeStamp(req.start),
-        end=TimeStamp(req.end)))
-    print(list(map(lambda booking: booking.__dict__, bookings)))
-    return "hello"
+async def get_free_rooms(
+        req: GetFreeRoomsRequest,
+        language: Annotated[Language, Depends(locale)]
+) -> list[RoomSchema]:
+    bookings = await adapter.get_bookings_in_period(
+        period=TimePeriod(
+            start=TimeStamp(req.start),
+            end=TimeStamp(req.end)))
+    return list(map(lambda booking: BookingWithIdSchema.from_booking_with_id(booking, language).room, bookings))
 
 
 @router.post(
@@ -87,7 +92,7 @@ async def get_free_rooms(req: GetFreeRoomsRequest, language: Annotated[Language,
     responses={
         status.HTTP_200_OK: {
             "description": "Room has been booked successfully",
-            "model": Booking,
+            "model": BookingWithIdSchema,
         },
         status.HTTP_400_BAD_REQUEST: {
             "description": "This room cannot be booked for this user during"
@@ -96,8 +101,25 @@ async def get_free_rooms(req: GetFreeRoomsRequest, language: Annotated[Language,
         },
     },
 )
-async def book_room(room_id: str, req: BookRoomRequest) -> Booking:
-    raise NotImplementedError
+async def book_room(
+        room_id: str,
+        req: BookRoomRequest,
+        language: Annotated[Language, Depends(locale)]
+) -> BookingWithIdSchema:
+    try:
+        booking = Booking(title=req.title,
+                          period=TimePeriod(
+                              TimeStamp(req.start),
+                              TimeStamp(req.end)),
+                          room=[room for room in bookable_rooms if room.id == room_id][0],
+                          owner=User(req.owner_email))
+    except IndexError as exception:
+        raise SuchRoomDoesNotExistError(room_id=room_id) from exception
+    booking_id = await adapter.create_booking(booking)
+    # ATTENTION: strange things here
+    #   BookingWithId instantiated from different sources: booking from user input and id from outlook_api
+    booking_with_id = BookingWithId.from_booking_and_id(booking, booking_id)
+    return BookingWithIdSchema.from_booking_with_id(booking_with_id, language)
 
 
 @router.get(
@@ -106,8 +128,8 @@ async def book_room(room_id: str, req: BookRoomRequest) -> Booking:
     operation_id="get_my_bookings",
     description="Returns a list of bookings for the requesting user.",
 )
-async def get_my_bookings() -> list[Booking]:
-    raise NotImplementedError
+async def get_my_bookings() -> list[BookingWithIdSchema]:
+    raise NotImplementedError # need to implement necessary method in adapter first
 
 
 @router.post(
@@ -115,8 +137,28 @@ async def get_my_bookings() -> list[Booking]:
     name="Query bookings",
     operation_id="query_bookings",
 )
-async def query_bookings(req: QueryBookingsRequest) -> list[Booking]:
-    raise NotImplementedError
+async def query_bookings(
+        req: QueryBookingsRequest,
+        language: Annotated[Language, Depends(locale)]
+) -> list[BookingWithIdSchema]:
+    filter_rooms = None
+    if req.filter.room_id_in is not None:
+        filter_rooms = []
+        for room_id in req.filter.room_id_in:
+            try:
+                filter_rooms.append([room for room in bookable_rooms if room.id == room_id][0])
+            except IndexError as exception:
+                raise SuchRoomDoesNotExistError(room_id=room_id) from exception
+    bookings_with_id = await adapter.get_bookings_in_period(
+        period=TimePeriod(
+            start=TimeStamp(req.filter.started_at_or_after),
+            end=TimeStamp(req.filter.ended_at_or_before)
+        ),
+        filter_rooms=filter_rooms
+    )
+    if req.filter.owner_email_in is not None:
+        bookings_with_id = [booking for booking in bookings_with_id if booking.owner.email in req.filter.owner_email_in]
+    return [BookingWithIdSchema.from_booking_with_id(booking_with_id, language) for booking_with_id in bookings_with_id]
 
 
 @router.delete(
@@ -133,4 +175,4 @@ async def query_bookings(req: QueryBookingsRequest) -> list[Booking]:
     },
 )
 async def delete_booking(booking_id: str) -> None:
-    raise NotImplementedError
+    await adapter.delete_booking(booking_id)

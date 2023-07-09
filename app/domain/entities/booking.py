@@ -131,6 +131,14 @@ class BookingWithId(Booking):
         super().__init__(**kwargs)
         self._id = kwargs["id"]
 
+    @staticmethod
+    def from_booking_and_id(booking: Booking, id: str) -> "BookingWithId":
+        return BookingWithId(id=id,
+                             title=booking.title,
+                             period=booking.period,
+                             room=booking.room,
+                             owner=booking.owner)
+
     @property
     def id(self):
         return self._id
