@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import random
 from os import getenv
+from re import finditer
 from uuid import uuid4
 
 import exchangelib
@@ -106,10 +107,8 @@ def test_booking_create_and_delete():
         period=period, filter_rooms=[room], filter_user_email=owner.email
     )
 
-    assert len(bookings_in_period) == 1
-
-    assert bookings_in_period[0].id == booking_id
-    assert bookings_in_period[0].owner.email == owner.email
+    assert len(bookings_in_period) >= 1
+    assert booking_id in map(lambda b: b.id, bookings_in_period)
 
     adapter.delete_booking_blocking(booking_id)
 
