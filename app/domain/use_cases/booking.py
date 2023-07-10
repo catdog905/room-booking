@@ -1,5 +1,5 @@
 from app.domain.dependencies.bookings_repo import BookingsRepo
-from app.domain.entities import User, Room
+from app.domain.entities import Room, User
 
 
 async def book_room_for_user(

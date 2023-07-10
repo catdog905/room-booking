@@ -1,7 +1,6 @@
-__all__ = ["Room", "TimeStamp", "TimePeriod", "Booking"]
+__all__ = ["Room", "Booking"]
 
-from datetime import datetime, tzinfo
-
+from .common import TimePeriod
 from .iam import User
 
 
@@ -9,22 +8,6 @@ from .iam import User
 class Room:
     def __init__(self, name: str, email_address: str):
         pass
-
-
-# Moment in time
-class TimeStamp:
-    def __init__(self, dt: datetime, tz: tzinfo):
-        if dt.tzinfo is not None and dt.tzinfo != tz:
-            raise Exception("dt must not have a tzinfo set or it should match with tz")
-        self._datetime = dt
-        self._timezone = tz
-
-
-# Period in time
-class TimePeriod:
-    def __init__(self, start: TimeStamp, end: TimeStamp):
-        self._start = start
-        self._end = end
 
 
 # Single booking

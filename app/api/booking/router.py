@@ -1,15 +1,16 @@
-from fastapi import APIRouter, status, Depends
+from fastapi import APIRouter, Depends, status
+
+from app.api.dependencies import locale
+from app.api.iam.dependencies import authenticated_user
 
 from .schemas import (
-    Room,
     Booking,
-    BookRoomRequest,
     BookRoomError,
+    BookRoomRequest,
     GetFreeRoomsRequest,
     QueryBookingsRequest,
+    Room,
 )
-from ..deps import locale, auth
-
 
 unauthorized_responses: dict[int | str, dict[str, str]] = {
     status.HTTP_401_UNAUTHORIZED: {
@@ -20,7 +21,7 @@ unauthorized_responses: dict[int | str, dict[str, str]] = {
 
 router = APIRouter(
     tags=["Booking"],
-    dependencies=[Depends(locale), Depends(auth)],
+    dependencies=[Depends(locale), Depends(authenticated_user)],
     responses=unauthorized_responses,
 )
 

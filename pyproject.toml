@@ -11,6 +11,7 @@ packages = [{include = "room_booking"}]
 python = "^3.11"
 fastapi = "^0.97.0"
 uvicorn = {extras = ["standard"], version = "^0.22.0"}
+pyjwt = "^2.7.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
