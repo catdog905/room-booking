@@ -159,14 +159,32 @@ class OutlookBookings(BookingsRepo):
         filter_rooms: list[Room] | None = None,
         filter_user_email: str | None = None,
     ) -> list[BookingWithId]:
-        # TODO(metafates): assertion magic so that pyright will stop complaining about this
-        items_in_period: list[exchangelib.CalendarItem] = list(
-            self._account.calendar.view(  # type: ignore
-                start=period.start.datetime, end=period.end.datetime
-            )
-        )
+        bookings: list[BookingWithId] = []
+        bookings_ids: set[BookingId] = set()
+        bookings_hashes: set[str] = set()
 
-        # FIXME(metafates): this is a super dumb and slow solution just to get the idea
+        def hash_booking_by_period_and_room(booking: Booking) -> str:
+            period = f"{booking.period.start.datetime.isoformat()}::{booking.period.end.datetime.isoformat()}"
+            room = f"::{booking.room.email}"
+            return period + room
+
+        for item in self._account.calendar.view(  # type: ignore
+            start=period.start.datetime, end=period.end.datetime
+        ):
+            try:
+                booking = self._convert_calendar_item_to_booking_with_id(
+                    item, self._rooms
+                )
+            except InvalidCalendarItemError as e:
+                logger.warning(f"Invalid calendar item: {e}")
+                continue
+
+            # we don't need to check for id duplicates here
+
+            bookings.append(booking)
+            bookings_ids.add(booking.id)
+            bookings_hashes.add(hash_booking_by_period_and_room(booking))
+
         if filter_rooms is None:
             filter_rooms = self._rooms.get_all()
 
@@ -179,31 +197,31 @@ class OutlookBookings(BookingsRepo):
                 start=period.start.datetime,
                 end=period.end.datetime,
             ).all()
-            items_in_period.extend(items)
 
-        bookings: list[BookingWithId] = []
-        bookings_ids: set[BookingId] = set()
+            for item in items:
+                try:
+                    booking = self._convert_calendar_item_to_booking_with_id(
+                        item, self._rooms
+                    )
+                except InvalidCalendarItemError as e:
+                    logger.warning(f"Invalid calendar item: {e}")
+                    continue
 
-        for item in items_in_period:
-            try:
-                booking = self._convert_calendar_item_to_booking_with_id(
-                    item, self._rooms
-                )
-            except InvalidCalendarItemError as e:
-                logger.warning(f"Invalid calendar item: {e}")
-                continue
+                if (
+                    filter_user_email is not None
+                    and booking.owner.email != filter_user_email
+                ):
+                    continue
 
-            if (
-                filter_user_email is not None
-                and booking.owner.email != filter_user_email
-            ):
-                continue
+                if booking.id in bookings_ids:
+                    continue
 
-            if booking.id in bookings_ids:
-                continue
+                if hash_booking_by_period_and_room(booking) in bookings_hashes:
+                    continue
 
-            bookings_ids.add(booking.id)
-            bookings.append(booking)
+                bookings.append(booking)
+                bookings_ids.add(booking.id)
+                bookings_hashes.add(hash_booking_by_period_and_room(booking))
 
         return bookings
 
