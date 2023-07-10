@@ -41,8 +41,11 @@ class MissingCalendarItemFieldError(InvalidCalendarItemError):
 class RoomsRegistry:
     _rooms_by_email_map: dict[str, Room]
     _rooms_by_name_map: dict[str, Room]
+    _rooms: list[Room]
 
     def __init__(self, rooms: list[Room]):
+        self._rooms = rooms
+
         self._rooms_by_email_map = {}
         self._rooms_by_name_map = {}
 
@@ -56,6 +59,9 @@ class RoomsRegistry:
 
     def get_by_name(self, name: str) -> Room | None:
         return self._rooms_by_name_map.get(name)
+
+    def get_all(self) -> list[Room]:
+        return self._rooms
 
 
 class BookingsDict(TypedDict):
@@ -161,22 +167,22 @@ class OutlookBookings(BookingsRepo):
         )
 
         # FIXME(metafates): this is a super dumb and slow solution just to get the idea
-        if filter_rooms is not None:
-            for room, account in zip(
-                filter_rooms,
-                map(self._get_ews_account_for_room, filter_rooms),
-            ):
-                logger.info(
-                    f"Getting calendar items for room {room.get_name(Language.EN)}"
-                )
-                items = account.calendar.view(  # type: ignore
-                    start=period.start.datetime,
-                    end=period.end.datetime,
-                ).all()
-                items_in_period.extend(items)
+        if filter_rooms is None:
+            filter_rooms = self._rooms.get_all()
+
+        for room, account in zip(
+            filter_rooms,
+            map(self._get_ews_account_for_room, filter_rooms),
+        ):
+            logger.info(f"Getting calendar items for room {room.get_name(Language.EN)}")
+            items = account.calendar.view(  # type: ignore
+                start=period.start.datetime,
+                end=period.end.datetime,
+            ).all()
+            items_in_period.extend(items)
 
         bookings: list[BookingWithId] = []
-        bookings_ids: set[str] = set()
+        bookings_ids: set[BookingId] = set()
 
         for item in items_in_period:
             try:
