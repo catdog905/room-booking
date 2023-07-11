@@ -1,7 +1,9 @@
+
 from app.domain.entities.time.time_stamp import TimeStamp
 from app.domain.entities.exceptions.end_time_before_start_time_exception import EndTimeBeforeStartTimeException
 
 
+# Period in time
 class TimePeriod:
     def __init__(self, start: TimeStamp, end: TimeStamp):
         if end < start:
@@ -10,9 +12,9 @@ class TimePeriod:
         self._end = end
 
     @property
-    def start(self):
+    def start(self) -> TimeStamp:
         return self._start
 
     @property
-    def end(self):
+    def end(self) -> TimeStamp:
         return self._end

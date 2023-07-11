@@ -10,16 +10,13 @@ from fastapi import APIRouter, Depends, status, HTTPException
 
 from .api_exceptions.such_room_does_not_exist_error import SuchRoomDoesNotExistError
 from .schemas import (
-    Booking,
     BookRoomError,
     BookRoomRequest,
     GetFreeRoomsRequest,
     QueryBookingsRequest,
     RoomSchema,
-    BookingWithIdSchema,
-    Room,
+    BookingWithIdSchema
 )
-from ..deps import auth, locale
 from ...adapters.outlook import OutlookBookings, RoomsRegistry
 from ...config import bookable_rooms
 from ...config import config

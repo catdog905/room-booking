@@ -3,8 +3,6 @@ __all__ = ["Environment", "Config", "config", "bookable_rooms"]
 from datetime import timedelta
 from enum import StrEnum
 
-from pydantic import AnyHttpUrl, BaseSettings, Field
-
 from app.domain.entities.booking import Room
 from app.domain.entities.booking import RoomType
 from pydantic import AnyHttpUrl, BaseSettings, Field

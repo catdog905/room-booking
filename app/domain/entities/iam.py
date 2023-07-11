@@ -4,8 +4,7 @@ IAM — Identity and Access Management.
 
 __all__ = ["User", "Integration", "RefreshTokenInfo"]
 
-
-from app.domain.entities.common import TimeStamp
+from app.domain.entities.time.time_stamp import TimeStamp
 
 
 class User:

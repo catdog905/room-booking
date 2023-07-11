@@ -1,27 +1,61 @@
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta, timezone
 
 
 class TimeStamp:
-    def __init__(self, datetime_utc: datetime):
-        if datetime_utc.tzinfo not in (None, UTC):
-            raise Exception("datetime_utc timezone must be UTC")
-        self._datetime_utc = datetime_utc.replace(tzinfo=UTC)
+    def __init__(self, timestamp: float):
+        """
+        :param timestamp: POSIX timestamp (number of seconds from epoch).
+        """
+        self._timestamp = timestamp
 
-    @property
-    def datetime(self):
-        return self._datetime_utc
+    def __add__(self, other):
+        if not isinstance(other, timedelta):
+            raise TypeError(
+                "unsupported operand type(s) for +: 'TimeStamp' and '{}'".format(
+                    type(other)
+                )
+            )
+        return TimeStamp(self._timestamp + other.total_seconds())
 
-    def __lt__(self, other: "TimeStamp"):
-        return self._datetime_utc < other._datetime_utc
+    def __le__(self, other):
+        if not isinstance(other, TimeStamp):
+            raise TypeError(
+                "unsupported operand type(s) for <=: 'TimeStamp' and '{}'".format(
+                    type(other)
+                )
+            )
+        return self._timestamp <= other._timestamp
 
-    def __le__(self, other: "TimeStamp"):
-        return self._datetime_utc <= other._datetime_utc
+    def __ge__(self, other):
+        if not isinstance(other, TimeStamp):
+            raise TypeError(
+                "unsupported operand type(s) for >=: 'TimeStamp' and '{}'".format(
+                    type(other)
+                )
+            )
+        return self._timestamp >= other._timestamp
 
-    def __gt__(self, other: "TimeStamp"):
-        return self._datetime_utc > other._datetime_utc
+    def __lt__(self, other):
+        if not isinstance(other, TimeStamp):
+            raise TypeError(
+                "unsupported operand type(s) for <: 'TimeStamp' and '{}'".format(
+                    type(other)
+                )
+            )
+        return self._timestamp < other._timestamp
 
-    def __ge__(self, other: "TimeStamp"):
-        return self._datetime_utc >= other._datetime_utc
+    def __gt__(self, other):
+        if not isinstance(other, TimeStamp):
+            raise TypeError(
+                "unsupported operand type(s) for >: 'TimeStamp' and '{}'".format(
+                    type(other)
+                )
+            )
+        return self._timestamp > other._timestamp
 
-    def __str__(self):
-        return str(self._datetime_utc)
+    def datetime_utc(self) -> datetime:
+        return datetime.fromtimestamp(self._timestamp, tz=timezone.utc)
+
+    @staticmethod
+    def now() -> "TimeStamp":
+        return TimeStamp(datetime.now(tz=timezone.utc).timestamp())

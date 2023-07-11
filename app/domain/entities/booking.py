@@ -4,10 +4,6 @@ from enum import StrEnum
 from typing import TypedDict, Unpack, assert_never
 
 from .common import Language
-from datetime import UTC, datetime
-from typing import TypedDict, Unpack, assert_never
-
-from .common import Language, TimePeriod
 from .iam import User
 from .time.time_period import TimePeriod
 
@@ -38,15 +34,6 @@ class Room:
     @property
     def email(self):
         return self._email
-    def __init__(
-        self,
-        email: str,
-        name_en: str,
-        name_ru: str,
-    ):
-        self._email = email
-        self._name_en = name_en
-        self._name_ru = name_ru
 
     def get_name(self, lang: Language) -> str:
         match lang:

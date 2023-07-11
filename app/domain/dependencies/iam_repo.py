@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
-from app.domain.entities.common import TimeStamp
 from app.domain.entities.iam import Integration, RefreshTokenInfo, User
+from app.domain.entities.time.time_stamp import TimeStamp
 
 
 class AuthRepo(ABC):

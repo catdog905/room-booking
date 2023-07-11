@@ -21,16 +21,6 @@ from app.domain.entities.common import Language
 from app.domain.entities.time.time_period import TimePeriod
 from app.domain.entities.time.time_stamp import TimeStamp
 from app.domain.entities.iam import User
-from app.domain.entities import (
-    Booking,
-    BookingId,
-    BookingWithId,
-    Language,
-    Room,
-    TimePeriod,
-    TimeStamp,
-    User,
-)
 
 DEFAULT_BOOKING_TITLE = "Untitled"
 LEGACY_BOOKING_SYSTEM_EMAIL = "TODO"

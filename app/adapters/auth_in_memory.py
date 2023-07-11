@@ -1,7 +1,7 @@
 from app.config import config
 from app.domain.dependencies.iam_repo import AuthRepo
-from app.domain.entities import Integration, RefreshTokenInfo, User
-from app.domain.entities.common import TimeStamp
+from app.domain.entities.iam import RefreshTokenInfo, Integration, User
+from app.domain.entities.time.time_stamp import TimeStamp
 
 
 class InMemoryAuthRepo(AuthRepo):
