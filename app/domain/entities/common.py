@@ -1,4 +1,10 @@
 from datetime import datetime, timedelta, timezone
+from enum import StrEnum
+
+
+class Language(StrEnum):
+    RU = "ru"
+    EN = "en"
 
 
 # Moment in time
@@ -65,5 +71,15 @@ class TimeStamp:
 # Period in time
 class TimePeriod:
     def __init__(self, start: TimeStamp, end: TimeStamp):
+        if end < start:
+            raise Exception("end must not be before start")
         self._start = start
         self._end = end
+
+    @property
+    def start(self) -> TimeStamp:
+        return self._start
+
+    @property
+    def end(self) -> TimeStamp:
+        return self._end
