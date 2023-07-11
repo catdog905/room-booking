@@ -3,8 +3,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from app.domain.entities import Room, Language
-from app.domain.entities.booking import RoomType, BookingWithId
+from app.domain.entities.common import Language
+from app.domain.entities.booking import Room, RoomType, BookingWithId
 
 
 class RoomSchema(BaseModel):
@@ -41,19 +41,19 @@ class BookingWithIdSchema(BaseModel):
         return BookingWithIdSchema(id=booking.id,
                                    title=booking.title,
                                    start=booking.period.start.datetime,
-                                   end=booking.period.start.datetime,
+                                   end=booking.period.end.datetime,
                                    room=RoomSchema.from_room(booking.room, language),
                                    owner_email=booking.owner.email)
 
 
 class BookingsFilter(BaseModel):
     started_at_or_after: datetime = Field(
-        datetime.min,
+        ...,
         description="When specified, only bookings that started at this time "
                     "or later will be returned.",
     )
     ended_at_or_before: datetime = Field(
-        datetime.max,
+        ...,
         description="When specified, only bookings that ended at this time "
                     "or sooner will be returned.",
     )

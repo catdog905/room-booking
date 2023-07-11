@@ -1,15 +1,10 @@
-import concurrent
-from typing import Annotated, Optional
+from typing import Annotated
 
 import exchangelib
-from fastapi import APIRouter, Depends, status
+import exchangelib.errors
+from fastapi import APIRouter, Depends, status, HTTPException
 
 from .api_exceptions.such_room_does_not_exist_error import SuchRoomDoesNotExistError
-
-from ...adapters.outlook import OutlookBookings, RoomsRegistry
-from ...config import config
-from ...config import bookable_rooms
-from ..deps import auth, locale
 from .schemas import (
     BookRoomError,
     BookRoomRequest,
@@ -18,7 +13,16 @@ from .schemas import (
     RoomSchema,
     BookingWithIdSchema,
 )
-from ...domain.entities import Language, Room, TimePeriod, TimeStamp, Booking, User, BookingWithId
+from ..deps import auth, locale
+from ...adapters.outlook import OutlookBookings, RoomsRegistry
+from ...config import bookable_rooms
+from ...config import config
+from ...domain.entities.booking import Booking, BookingWithId
+from ...domain.entities.common import Language
+from ...domain.entities.exceptions.end_time_before_start_time_exception import EndTimeBeforeStartTimeException
+from ...domain.entities.iam import User
+from ...domain.entities.time.time_period import TimePeriod
+from ...domain.entities.time.time_stamp import TimeStamp
 
 unauthorized_responses: dict[int | str, dict[str, str]] = {
     status.HTTP_401_UNAUTHORIZED: {
@@ -33,11 +37,11 @@ router = APIRouter(
 )
 
 credentials = exchangelib.OAuth2Credentials(
-        client_id=config.app_client_id,
-        client_secret=config.app_secret,
-        tenant_id=config.app_tenant_id,
-        identity=exchangelib.Identity(primary_smtp_address=config.outlook_email),
-    )
+    client_id=config.app_client_id,
+    client_secret=config.app_secret,
+    tenant_id=config.app_tenant_id,
+    identity=exchangelib.Identity(primary_smtp_address=config.outlook_email),
+)
 server_config = exchangelib.Configuration(
     server="outlook.office365.com",
     credentials=credentials,
@@ -55,6 +59,7 @@ adapter = OutlookBookings(
     rooms_registry=RoomsRegistry(bookable_rooms),
     executor=None
 )
+
 
 @router.get(
     "/rooms",
@@ -129,7 +134,7 @@ async def book_room(
     description="Returns a list of bookings for the requesting user.",
 )
 async def get_my_bookings() -> list[BookingWithIdSchema]:
-    raise NotImplementedError # need to implement necessary method in adapter first
+    raise NotImplementedError  # need to implement necessary method in adapter first
 
 
 @router.post(
@@ -147,15 +152,21 @@ async def query_bookings(
         for room_id in req.filter.room_id_in:
             try:
                 filter_rooms.append([room for room in bookable_rooms if room.id == room_id][0])
-            except IndexError as exception:
-                raise SuchRoomDoesNotExistError(room_id=room_id) from exception
-    bookings_with_id = await adapter.get_bookings_in_period(
-        period=TimePeriod(
-            start=TimeStamp(req.filter.started_at_or_after),
-            end=TimeStamp(req.filter.ended_at_or_before)
-        ),
-        filter_rooms=filter_rooms
-    )
+            except IndexError:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                    detail=str(SuchRoomDoesNotExistError(room_id=room_id)))
+    try:
+        bookings_with_id = await adapter.get_bookings_in_period(
+            period=TimePeriod(
+                start=TimeStamp(req.filter.started_at_or_after),
+                end=TimeStamp(req.filter.ended_at_or_before)
+            ),
+            filter_rooms=filter_rooms
+        )
+    except exchangelib.errors.ErrorCalendarViewRangeTooBig as exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exception))
+    except EndTimeBeforeStartTimeException as exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exception))
     if req.filter.owner_email_in is not None:
         bookings_with_id = [booking for booking in bookings_with_id if booking.owner.email in req.filter.owner_email_in]
     return [BookingWithIdSchema.from_booking_with_id(booking_with_id, language) for booking_with_id in bookings_with_id]

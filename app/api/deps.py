@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import Depends, Header
 from fastapi.security import APIKeyHeader
 
-from app.domain.entities import Language
+from app.domain.entities.common import Language
 
 DEFAULT_LOCALE = Language.EN
 

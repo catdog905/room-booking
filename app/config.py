@@ -1,10 +1,10 @@
-__all__ = ["Environment", "Config", "config"]
+__all__ = ["Environment", "Config", "config", "bookable_rooms"]
 
 from enum import StrEnum
 
-from pydantic import AnyHttpUrl, BaseSettings
+from pydantic import AnyHttpUrl, BaseSettings, Field
 
-from app.domain.entities import Room
+from app.domain.entities.booking import Room
 from app.domain.entities.booking import RoomType
 
 
@@ -33,12 +33,11 @@ class Config(BaseSettings):
 
     cors_allowed_origins: list[AnyHttpUrl] = []
 
-    outlook_email: str = "vladislav@0f4tw.onmicrosoft.com"
-
-    app_tenant_id: str = "6f87849e-85b5-4661-ab58-ba9d87d3469a"
-    app_client_id: str = "c38ece28-3e8e-4dc8-88be-84b4d67cc843"
-    app_secret: str = "lTn8Q~p_gAqeqwHR2pXp1NazJJttd7JJ~KI~1bfE"
-    app_secret_id: str = "55eaaa43-b240-46ef-9983-65b05e1658c4"
+    outlook_email: str = Field(default=...)
+    app_tenant_id: str = Field(default=...)
+    app_client_id: str = Field(default=...)
+    app_secret: str = Field(default=...)
+    app_secret_id: str = Field(default=...)
 
     class Config:
         env_file = ".env"

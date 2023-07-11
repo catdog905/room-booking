@@ -1,11 +1,11 @@
-__all__ = ["Room", "TimeStamp", "TimePeriod", "Booking", "BookingWithId", "BookingId"]
+__all__ = ["Room", "Booking", "BookingWithId", "BookingId", "RoomType"]
 
-from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TypedDict, Unpack, assert_never
 
 from .common import Language
 from .iam import User
+from .time.time_period import TimePeriod
 
 BookingId = str
 
@@ -46,43 +46,6 @@ class Room:
                 assert_never(lang)
 
 
-class TimeStamp:
-    def __init__(self, datetime_utc: datetime):
-        if datetime_utc.tzinfo not in (None, UTC):
-            raise Exception("datetime_utc timezone must be UTC")
-        self._datetime_utc = datetime_utc.replace(tzinfo=UTC)
-
-    @property
-    def datetime(self):
-        return self._datetime_utc
-
-    def __lt__(self, other: "TimeStamp"):
-        return self._datetime_utc < other._datetime_utc
-
-    def __le__(self, other: "TimeStamp"):
-        return self._datetime_utc <= other._datetime_utc
-
-    def __gt__(self, other: "TimeStamp"):
-        return self._datetime_utc > other._datetime_utc
-
-    def __ge__(self, other: "TimeStamp"):
-        return self._datetime_utc >= other._datetime_utc
-
-
-class TimePeriod:
-    def __init__(self, start: TimeStamp, end: TimeStamp):
-        if end < start:
-            raise Exception("end must not be before start")
-        self._start = start
-        self._end = end
-
-    @property
-    def start(self):
-        return self._start
-
-    @property
-    def end(self):
-        return self._end
 
 
 class BookingDict(TypedDict):

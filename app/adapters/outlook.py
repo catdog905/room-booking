@@ -11,16 +11,16 @@ import exchangelib
 import exchangelib.recurrence
 
 from app.domain.dependencies import BookingsRepo
-from app.domain.entities import (
+from app.domain.entities.booking import (
     Booking,
     BookingId,
     BookingWithId,
-    Language,
-    Room,
-    TimePeriod,
-    TimeStamp,
-    User,
+    Room
 )
+from app.domain.entities.common import Language
+from app.domain.entities.time.time_period import TimePeriod
+from app.domain.entities.time.time_stamp import TimeStamp
+from app.domain.entities.iam import User
 
 DEFAULT_BOOKING_TITLE = "Untitled"
 LEGACY_BOOKING_SYSTEM_EMAIL = "TODO"
