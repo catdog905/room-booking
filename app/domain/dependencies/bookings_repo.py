@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from app.domain.entities.booking import Booking, BookingId, Room, BookingWithId
 from app.domain.entities.time.time_period import TimePeriod
 from app.domain.entities.iam import User
+from app.domain.entities import Booking, BookingId, Room, TimePeriod, User
+from app.domain.entities.booking import BookingWithId
 
 
 class BookingsRepo(ABC):

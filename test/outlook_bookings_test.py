@@ -9,14 +9,8 @@ import exchangelib
 import pytest
 
 from app.adapters.outlook import OutlookBookings, RoomsRegistry
-from app.domain.entities.booking import (
-    Booking,
-    BookingId,
-    Room,
-    TimePeriod,
-    TimeStamp,
-    User,
-)
+from app.domain.entities.booking import Booking, BookingId, Room, User
+from app.domain.entities.common import TimePeriod, TimeStamp
 
 EMAIL = getenv("EMAIL")
 APP_TENANT_ID = getenv("APP_TENANT_ID")
@@ -85,11 +79,13 @@ def random_time_period() -> TimePeriod:
     minutes = random.randint(0, 11 * 3) * 5
     end_date = start_date + datetime.timedelta(minutes=minutes)
 
-    return TimePeriod(TimeStamp(start_date), TimeStamp(end_date))
+    return TimePeriod(
+        TimeStamp(start_date.timestamp()), TimeStamp(end_date.timestamp())
+    )
 
 
 def test_booking_create_and_delete():
-    owner = User("user@example.com")
+    owner = User(id=0, email="user@example.com")
     period = random_time_period()
     room = random.choice(rooms)
     booking = Booking(

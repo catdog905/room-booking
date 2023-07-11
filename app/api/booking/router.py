@@ -1,3 +1,7 @@
+from fastapi import APIRouter, Depends, status
+
+from app.api.dependencies import locale
+from app.api.iam.dependencies import authenticated_user
 from typing import Annotated
 
 import exchangelib
@@ -6,12 +10,14 @@ from fastapi import APIRouter, Depends, status, HTTPException
 
 from .api_exceptions.such_room_does_not_exist_error import SuchRoomDoesNotExistError
 from .schemas import (
+    Booking,
     BookRoomError,
     BookRoomRequest,
     GetFreeRoomsRequest,
     QueryBookingsRequest,
     RoomSchema,
     BookingWithIdSchema,
+    Room,
 )
 from ..deps import auth, locale
 from ...adapters.outlook import OutlookBookings, RoomsRegistry
@@ -32,7 +38,7 @@ unauthorized_responses: dict[int | str, dict[str, str]] = {
 
 router = APIRouter(
     tags=["Booking"],
-    dependencies=[Depends(locale), Depends(auth)],
+    dependencies=[Depends(locale), Depends(authenticated_user)],
     responses=unauthorized_responses,
 )
 

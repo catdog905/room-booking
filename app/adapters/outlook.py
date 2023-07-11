@@ -21,6 +21,16 @@ from app.domain.entities.common import Language
 from app.domain.entities.time.time_period import TimePeriod
 from app.domain.entities.time.time_stamp import TimeStamp
 from app.domain.entities.iam import User
+from app.domain.entities import (
+    Booking,
+    BookingId,
+    BookingWithId,
+    Language,
+    Room,
+    TimePeriod,
+    TimeStamp,
+    User,
+)
 
 DEFAULT_BOOKING_TITLE = "Untitled"
 LEGACY_BOOKING_SYSTEM_EMAIL = "TODO"
@@ -93,8 +103,8 @@ class OutlookBookings(BookingsRepo):
         item = exchangelib.CalendarItem(
             account=self._account,
             folder=self._account.calendar,
-            start=booking.period.start.datetime,
-            end=booking.period.end.datetime,
+            start=booking.period.start.datetime_utc(),
+            end=booking.period.end.datetime_utc(),
             subject=booking.title,
             location=booking.room.get_name(Language.EN),
             organizer=exchangelib.Mailbox(email_address=booking.owner.email),
@@ -164,12 +174,12 @@ class OutlookBookings(BookingsRepo):
         bookings_hashes: set[str] = set()
 
         def hash_booking_by_period_and_room(booking: Booking) -> str:
-            period = f"{booking.period.start.datetime.isoformat()}::{booking.period.end.datetime.isoformat()}"
+            period = f"{booking.period.start.datetime_utc().isoformat()}::{booking.period.end.datetime_utc().isoformat()}"
             room = f"::{booking.room.email}"
             return period + room
 
         for item in self._account.calendar.view(  # type: ignore
-            start=period.start.datetime, end=period.end.datetime
+            start=period.start.datetime_utc(), end=period.end.datetime_utc()
         ):
             try:
                 booking = self._convert_calendar_item_to_booking_with_id(
@@ -194,8 +204,8 @@ class OutlookBookings(BookingsRepo):
         ):
             logger.info(f"Getting calendar items for room {room.get_name(Language.EN)}")
             items = account.calendar.view(  # type: ignore
-                start=period.start.datetime,
-                end=period.end.datetime,
+                start=period.start.datetime_utc(),
+                end=period.end.datetime_utc(),
             ).all()
 
             for item in items:
@@ -258,11 +268,11 @@ class OutlookBookings(BookingsRepo):
             raise MissingCalendarItemFieldError("owner")
 
         if organizer_email == self._account.primary_smtp_address:
-            # TODO: check types
-            return User(item.required_attendees[0].mailbox.email_address)  # type: ignore
+            # TODO(linus torvalds): check types
+            return User(id=0, email=item.required_attendees[0].mailbox.email_address)  # type: ignore
 
         if organizer_email != LEGACY_BOOKING_SYSTEM_EMAIL:
-            return User(organizer_email)
+            return User(id=0, email=organizer_email)
 
         attendees = item.required_attendees
 
@@ -290,7 +300,7 @@ class OutlookBookings(BookingsRepo):
             attendee.mailbox, exchangelib.Mailbox
         )
 
-        return User(str(attendee.mailbox.email_address))
+        return User(id=0, email=str(attendee.mailbox.email_address))
 
     def _convert_calendar_item_to_booking_with_id(
         self,
@@ -411,24 +421,24 @@ def convert_ews_date_or_time_to_time_stamp(
 ) -> TimeStamp:
     if isinstance(ews, exchangelib.EWSDateTime):
         return TimeStamp(
-            datetime_utc=datetime(
+            datetime(
                 year=ews.year,
                 month=ews.month,
                 day=ews.day,
                 hour=ews.hour,
                 minute=ews.minute,
-            )
+            ).timestamp()
         )
 
     if isinstance(ews, exchangelib.EWSDate):
         return TimeStamp(
-            datetime_utc=datetime(
+            datetime(
                 year=ews.year,
                 month=ews.month,
                 day=ews.day,
                 hour=0,
                 minute=0,
-            )
+            ).timestamp()
         )
 
     raise InvalidCalendarItemError("Unknown date type")

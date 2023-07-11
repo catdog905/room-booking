@@ -1,11 +1,13 @@
 __all__ = ["Environment", "Config", "config", "bookable_rooms"]
 
+from datetime import timedelta
 from enum import StrEnum
 
 from pydantic import AnyHttpUrl, BaseSettings, Field
 
 from app.domain.entities.booking import Room
 from app.domain.entities.booking import RoomType
+from pydantic import AnyHttpUrl, BaseSettings, Field
 
 
 bookable_rooms = [
@@ -38,6 +40,13 @@ class Config(BaseSettings):
     app_client_id: str = Field(default=...)
     app_secret: str = Field(default=...)
     app_secret_id: str = Field(default=...)
+
+    secret_key: str = Field(default=...)
+    access_token_lifetime: timedelta = timedelta(minutes=15)
+    refresh_token_lifetime: timedelta = timedelta(days=30)
+
+    # Map {"name": "api_key"}
+    authorized_integrations: dict[str, str] = Field(default_factory=lambda: {})
 
     class Config:
         env_file = ".env"
