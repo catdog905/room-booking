@@ -19,9 +19,12 @@ class User:
     @property
     def email(self) -> str:
         return self._email
-    @property
-    def email(self) -> str:
-        return self._email
+
+    def __eq__(self, other):
+        return self._email == other.email
+
+    def __str__(self):
+        return f'{self._id} {self._email}'
 
 
 class Integration:

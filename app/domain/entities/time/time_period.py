@@ -18,3 +18,6 @@ class TimePeriod:
     @property
     def end(self) -> TimeStamp:
         return self._end
+
+    def __str__(self):
+        return f'start={str(self.start)}; end={str(self.end)} '

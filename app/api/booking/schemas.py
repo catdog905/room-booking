@@ -1,10 +1,9 @@
 from datetime import datetime
-from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from app.domain.entities.common import Language
 from app.domain.entities.booking import Room, RoomType, BookingWithId
+from app.domain.entities.common import Language
 
 
 class RoomSchema(BaseModel):
@@ -40,8 +39,8 @@ class BookingWithIdSchema(BaseModel):
     def from_booking_with_id(booking: BookingWithId, language: Language) -> "BookingWithIdSchema":
         return BookingWithIdSchema(id=booking.id,
                                    title=booking.title,
-                                   start=booking.period.start.datetime,
-                                   end=booking.period.end.datetime,
+                                   start=booking.period.start.datetime_utc(),
+                                   end=booking.period.end.datetime_utc(),
                                    room=RoomSchema.from_room(booking.room, language),
                                    owner_email=booking.owner.email)
 
@@ -78,11 +77,6 @@ class BookRoomRequest(BaseModel):
     title: str
     start: datetime
     end: datetime
-    owner_email: str | None = Field(
-        None,
-        description="Owner email address of the booking. Can be omitted, if "
-                    "the request is made by the user who books a room.",
-    )
 
 
 class BookRoomError(BaseModel):

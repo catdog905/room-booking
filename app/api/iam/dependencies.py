@@ -6,12 +6,11 @@ from fastapi.security import APIKeyHeader
 
 from app.api.dependencies import auth_repo
 from app.domain.dependencies.iam_repo import AuthRepo
-from app.domain.entities.iam import Integration
+from app.domain.entities.iam import Integration, User
 from app.domain.exceptions import InvalidCredentialsError
 from app.domain.use_cases.iam import authorize_integration, authorize_user
 
 from .exceptions import InvalidCredentialsHTTPError
-from .schemas import User
 
 auth_scheme_bearer = APIKeyHeader(name="Authorization", scheme_name="Bearer")
 auth_scheme_integration = APIKeyHeader(name="Authorization", scheme_name="Integration")
@@ -39,8 +38,7 @@ async def authenticated_user(
     repo: Annotated[AuthRepo, Depends(auth_repo)],  # TODO
 ) -> User:
     try:
-        user = await authorize_user(token, repo)
-        return User(email_address=user.email)
+        return await authorize_user(token, repo)
     except InvalidCredentialsError as exc:
         raise InvalidCredentialsHTTPError(exc.detail)
 

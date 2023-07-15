@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from app.api.dependencies import auth_repo
 from app.domain.dependencies.iam_repo import AuthRepo
-from app.domain.entities.iam import Integration, RefreshTokenInfo
+from app.domain.entities.iam import Integration, RefreshTokenInfo, User
 from app.domain.exceptions import InvalidCredentialsError
 from app.domain.use_cases.iam import (
     login_user,
@@ -15,7 +15,7 @@ from app.domain.use_cases.iam import (
 
 from .dependencies import authenticated_integration, authenticated_user
 from .exceptions import InvalidCredentialsHTTPError
-from .schemas import User
+from .schemas import UserSchema
 
 router = APIRouter(tags=["Auth"])
 
@@ -67,8 +67,8 @@ async def logout(
 
 
 @router.get("/me")
-def get_me(user: Annotated[User, Depends(authenticated_user)]) -> User:
-    return user
+def get_me(user: Annotated[User, Depends(authenticated_user)]) -> UserSchema:
+    return UserSchema(email_address=user.email)
 
 
 class TmpUserData(BaseModel):

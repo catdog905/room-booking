@@ -49,4 +49,5 @@ class InMemoryAuthRepo(AuthRepo):
         del self._refresh_tokens[token]
 
     async def get_integration_by_api_key(self, api_key: str) -> Integration | None:
+        print(self._integrations_by_api_keys)
         return self._integrations_by_api_keys.get(api_key)
