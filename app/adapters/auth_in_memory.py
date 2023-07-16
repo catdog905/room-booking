@@ -9,7 +9,7 @@ class InMemoryAuthRepo(AuthRepo):
         self._id_counter = 1
         self._users_by_id: dict[int, User] = {}
         self._integrations_by_api_keys: dict[str, Integration] = {}
-        for refresh_token, integration_name in config.authorized_integrations.items():
+        for integration_name, refresh_token in config.authorized_integrations.items():
             self._integrations_by_api_keys[refresh_token] = Integration(
                 name=integration_name,
             )
